@@ -274,6 +274,50 @@
     <!-- ===================================================================== -->
     <section id="view-athlete" class="hidden space-y-4">
 
+      <!-- BANNER CONFIRMACIÓN DE ESCANEO NFC AUTOMÁTICO -->
+      <div id="nfc-scan-banner" class="hidden rounded-3xl border-2 border-[#00E5FF]/80 bg-gradient-to-br from-[#06243E] via-[#081A33] to-[#061326] p-4 shadow-xl shadow-cyan-500/20 sm:p-5">
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex items-start gap-3 min-w-0">
+            <div class="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#00E5FF] text-slate-950 shadow-lg shadow-cyan-400/40">
+              <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.14 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
+              </svg>
+            </div>
+            <div class="min-w-0">
+              <div class="inline-flex items-center gap-1.5 rounded-full bg-emerald-400/20 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-emerald-300">
+                <span class="h-1.5 w-1.5 animate-ping rounded-full bg-emerald-400"></span>
+                Lectura NFC Registrada
+              </div>
+              <h2 id="nfc-scan-title" class="mt-1 text-base font-black text-white sm:text-lg">
+                ⚡ Chip NFC Escaneado: +750 mL (+1 Termo)
+              </h2>
+              <p id="nfc-scan-subtitle" class="mt-0.5 text-xs font-bold text-cyan-200">
+                Total acumulado en esta sesión: 750 mL (1.00 termo)
+              </p>
+            </div>
+          </div>
+          <button id="btn-nfc-dismiss" type="button" aria-label="Cerrar aviso NFC"
+            class="tap-btn shrink-0 rounded-xl border border-cyan-400/30 bg-slate-900/70 px-3 py-1.5 text-xs font-bold text-cyan-200 hover:bg-cyan-500/20">
+            Entendido
+          </button>
+        </div>
+
+        <div class="mt-3.5 grid grid-cols-1 gap-2 sm:grid-cols-3">
+          <button id="btn-nfc-adj-half" type="button"
+            class="tap-btn min-h-[46px] rounded-xl border border-cyan-400/40 bg-cyan-500/15 px-3 text-xs font-extrabold text-cyan-100 hover:bg-cyan-500/25">
+            Ajustar a +1/2 Termo
+          </button>
+          <button id="btn-nfc-adj-quarter" type="button"
+            class="tap-btn min-h-[46px] rounded-xl border border-blue-400/40 bg-blue-500/15 px-3 text-xs font-extrabold text-blue-100 hover:bg-blue-500/25">
+            Ajustar a +1/4 Termo
+          </button>
+          <button id="btn-nfc-undo-goto-p1" type="button"
+            class="tap-btn min-h-[46px] rounded-xl border border-amber-400/45 bg-amber-500/15 px-3 text-xs font-extrabold text-amber-200 hover:bg-amber-500/25">
+            Deshacer e ir a Peso Pre (Fase 1)
+          </button>
+        </div>
+      </div>
+
       <!-- TARJETA DE PERFIL Y TERMO EDITABLE -->
       <div class="glass-card rounded-3xl p-4 sm:p-5">
         <div class="flex flex-wrap items-start justify-between gap-3">
@@ -349,6 +393,25 @@
               <input id="ath-thermo-input" type="number" min="50" max="5000" step="any" value="750" aria-label="Capacidad exacta del termo en mL"
                 class="tabular-nums min-h-[44px] w-full bg-transparent text-center text-sm font-black text-[#00E5FF] focus:outline-none" />
               <span class="text-[11px] font-bold text-slate-400">mL</span>
+            </div>
+          </div>
+
+          <!-- Acción automática al escanear Chip NFC -->
+          <div class="mt-3.5 border-t border-slate-800/80 pt-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <span class="text-[11px] font-extrabold uppercase tracking-wider text-slate-300">
+                Al escanear mi Chip NFC (<code class="text-cyan-300">?id=...</code>):
+              </span>
+              <button id="btn-simulate-nfc" type="button"
+                class="tap-btn rounded-lg border border-cyan-500/35 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-extrabold text-cyan-300 hover:bg-cyan-500/20">
+                Simular toque NFC (+Termo)
+              </button>
+            </div>
+            <div class="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <button type="button" data-scan="1" class="ath-autoscan-btn tap-btn min-h-[42px] rounded-xl border border-cyan-400 bg-cyan-500/20 px-2 text-xs font-extrabold text-cyan-200 transition">+1 Termo</button>
+              <button type="button" data-scan="0.5" class="ath-autoscan-btn tap-btn min-h-[42px] rounded-xl border border-slate-700 bg-slate-900 px-2 text-xs font-bold text-slate-300 transition">+1/2 Termo</button>
+              <button type="button" data-scan="0.25" class="ath-autoscan-btn tap-btn min-h-[42px] rounded-xl border border-slate-700 bg-slate-900 px-2 text-xs font-bold text-slate-300 transition">+1/4 Termo</button>
+              <button type="button" data-scan="0" class="ath-autoscan-btn tap-btn min-h-[42px] rounded-xl border border-slate-700 bg-slate-900 px-2 text-xs font-bold text-slate-300 transition">Solo abrir</button>
             </div>
           </div>
         </div>
@@ -869,6 +932,21 @@
           <button id="btn-admin-back" type="button" class="font-bold text-cyan-300 hover:underline">
             &larr; Ir a Generador NFC / Atletas
           </button>
+        </div>
+      </div>
+
+      <!-- MONITOR EN VIVO DE ESCANEOS NFC EN CANCHA -->
+      <div id="admin-live-wrapper" class="hidden glass-card rounded-3xl p-4 sm:p-5">
+        <div class="flex items-center justify-between gap-2">
+          <div>
+            <h2 class="text-sm font-black uppercase tracking-wider text-cyan-300">
+              Hidratación en Curso (Escaneos NFC Activos)
+            </h2>
+            <p class="text-xs text-slate-400">Atletas acumulando tomas antes de su check-out post-entreno.</p>
+          </div>
+        </div>
+        <div id="admin-live-grid" class="mt-3 grid gap-2.5 sm:grid-cols-3">
+          <!-- Render dinámico -->
         </div>
       </div>
 

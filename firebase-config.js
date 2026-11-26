@@ -101,12 +101,30 @@ let state = {
 };
 
 const localListeners = new Set();
+const localAthleteListeners = new Set();
+
+function sortAthletesDesc(athletesMap) {
+  return Object.values(athletesMap || {}).sort((a, b) => {
+    const ta = new Date(a.updatedAt || 0).getTime();
+    const tb = new Date(b.updatedAt || 0).getTime();
+    return tb - ta;
+  });
+}
 
 function notifyLocalSubscribers() {
   const sessions = sortSessionsDesc(readLocalArray(STORAGE_KEYS.sessions));
   localListeners.forEach((cb) => {
     try {
       cb(sessions);
+    } catch {
+      // Ignorar errores de suscriptores individuales
+    }
+  });
+
+  const athletes = sortAthletesDesc(readLocalMap(STORAGE_KEYS.athletes));
+  localAthleteListeners.forEach((cb) => {
+    try {
+      cb(athletes);
     } catch {
       // Ignorar errores de suscriptores individuales
     }
@@ -211,16 +229,29 @@ export const HydroTagDB = {
     const id = String(profile?.id || "").trim();
     if (!id) throw new Error("ID de atleta requerido");
 
+    const localAthletes = readLocalMap(STORAGE_KEYS.athletes);
+    const prev = localAthletes[id] || {};
+
+    const hasAutoScan = profile.autoScanFraction !== undefined && profile.autoScanFraction !== null;
+    const autoScanVal = hasAutoScan
+      ? Number(profile.autoScanFraction)
+      : prev.autoScanFraction !== undefined
+        ? Number(prev.autoScanFraction)
+        : 1;
+
     const record = {
       id,
-      nombre: String(profile.nombre || "").trim(),
-      deporte: String(profile.deporte || "").trim(),
-      capacidadTermoMl: Number(profile.capacidadTermoMl) || 750,
+      nombre: profile.nombre !== undefined ? String(profile.nombre || "").trim() : String(prev.nombre || "").trim(),
+      deporte: profile.deporte !== undefined ? String(profile.deporte || "").trim() : String(prev.deporte || "").trim(),
+      capacidadTermoMl: Number(profile.capacidadTermoMl ?? prev.capacidadTermoMl) || 750,
+      autoScanFraction: Number.isFinite(autoScanVal) ? autoScanVal : 1,
+      consumoEnCursoMl: Number(profile.consumoEnCursoMl ?? prev.consumoEnCursoMl) || 0,
+      tomasEnCurso: Number(profile.tomasEnCurso ?? prev.tomasEnCurso) || 0,
+      ultimoEscaneoAt: profile.ultimoEscaneoAt !== undefined ? profile.ultimoEscaneoAt : (prev.ultimoEscaneoAt || null),
       updatedAt: new Date().toISOString()
     };
 
-    const localAthletes = readLocalMap(STORAGE_KEYS.athletes);
-    localAthletes[id] = { ...(localAthletes[id] || {}), ...record };
+    localAthletes[id] = { ...prev, ...record };
     writeLocalMap(STORAGE_KEYS.athletes, localAthletes);
 
     if (state.mode === "firebase" && state.db && state.fs) {
@@ -363,6 +394,40 @@ export const HydroTagDB = {
 
     return () => {
       localListeners.delete(callback);
+    };
+  },
+
+  async subscribeAthletes(callback) {
+    await this.init();
+
+    if (state.mode === "firebase" && state.db && state.fs) {
+      try {
+        const colRef = state.fs.collection(state.db, COLLECTIONS.athletes);
+        const unsub = state.fs.onSnapshot(
+          colRef,
+          (snapshot) => {
+            const map = {};
+            snapshot.forEach((docSnap) => {
+              map[docSnap.id] = { id: docSnap.id, ...docSnap.data() };
+            });
+            writeLocalMap(STORAGE_KEYS.athletes, map);
+            callback(sortAthletesDesc(map));
+          },
+          () => {
+            callback(sortAthletesDesc(readLocalMap(STORAGE_KEYS.athletes)));
+          }
+        );
+        return unsub;
+      } catch {
+        // Caer a modo local
+      }
+    }
+
+    localAthleteListeners.add(callback);
+    callback(sortAthletesDesc(readLocalMap(STORAGE_KEYS.athletes)));
+
+    return () => {
+      localAthleteListeners.delete(callback);
     };
   },
 

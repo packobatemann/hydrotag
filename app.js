@@ -24,6 +24,8 @@ const THIRST_LABELS = {
 const NA_MG_PER_G_SALT = 393; // 1 g sal de mesa (NaCl) = 393 mg de sodio
 const DEFAULT_THERMO_ML = 750;
 const DRAFT_PREFIX = "hydrotag_draft_v1_";
+const LAST_SCAN_PREFIX = "hydrotag_last_scan_v1_";
+const NFC_DEBOUNCE_MS = 4000;
 
 function escapeHtml(str) {
   return String(str ?? "")
@@ -138,7 +140,10 @@ const appState = {
   draft: null,
   timerIntervalId: null,
   adminUnsubscribe: null,
+  adminAthletesUnsubscribe: null,
   adminSessions: [],
+  adminLiveAthletes: [],
+  lastAutoScanIndex: null,
   deferredInstallPrompt: null,
   thermoSaveTimeout: null
 };
@@ -248,11 +253,17 @@ async function resolveRoute() {
     appState.adminUnsubscribe();
     appState.adminUnsubscribe = null;
   }
+  if (appState.adminAthletesUnsubscribe) {
+    appState.adminAthletesUnsubscribe();
+    appState.adminAthletesUnsubscribe = null;
+  }
 
   const params = new URLSearchParams(window.location.search);
   const isAdmin = params.get("admin") === "true";
   const rawId = params.get("id");
   const cleanId = rawId ? sanitizeAthleteId(rawId) : "";
+  const isManualView = params.get("view") === "1";
+  const nfcParam = params.get("nfc");
 
   const viewOnb = $("view-onboarding");
   const viewAth = $("view-athlete");
@@ -283,7 +294,7 @@ async function resolveRoute() {
     headerBadge.classList.remove("hidden");
     headerBadge.classList.add("flex");
     headerIdSpan.textContent = cleanId;
-    await initAthleteView(cleanId);
+    await initAthleteView(cleanId, { isNfcEntry: !isManualView, nfcParam });
     return;
   }
 
@@ -356,7 +367,7 @@ async function renderSavedAthletesList() {
 
   container.querySelectorAll("[data-open-athlete]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      navigateToParams({ id: btn.dataset.openAthlete });
+      navigateToParams({ id: btn.dataset.openAthlete, view: "1" });
     });
   });
 }
@@ -831,19 +842,169 @@ function renderPhase3Results() {
   `;
 }
 
-async function initAthleteView(athleteId) {
+function getScanFractionLabel(fraction) {
+  if (Math.abs(fraction - 1) < 0.001) return "1 Termo";
+  if (Math.abs(fraction - 0.5) < 0.001) return "1/2 Termo";
+  if (Math.abs(fraction - 0.25) < 0.001) return "1/4 Termo";
+  return `${fraction} Termo`;
+}
+
+function renderAutoScanButtons() {
+  const current =
+    appState.athleteProfile?.autoScanFraction !== undefined
+      ? Number(appState.athleteProfile.autoScanFraction)
+      : 1;
+
+  document.querySelectorAll(".ath-autoscan-btn").forEach((btn) => {
+    const val = Number(btn.dataset.scan);
+    if (Math.abs(val - current) < 0.001) {
+      btn.classList.remove("border-slate-700", "bg-slate-900", "text-slate-300", "font-bold");
+      btn.classList.add("border-cyan-400", "bg-cyan-500/20", "text-cyan-200", "font-extrabold");
+    } else {
+      btn.classList.add("border-slate-700", "bg-slate-900", "text-slate-300", "font-bold");
+      btn.classList.remove("border-cyan-400", "bg-cyan-500/20", "text-cyan-200", "font-extrabold");
+    }
+  });
+}
+
+async function syncAthleteLiveProgress(profile, draft) {
+  if (!profile || !profile.id || !draft) return;
+  try {
+    await HydroTagDB.saveAthlete({
+      ...profile,
+      consumoEnCursoMl: Number(draft.consumoMl) || 0,
+      tomasEnCurso: Array.isArray(draft.intakeLogs) ? draft.intakeLogs.length : 0,
+      ultimoEscaneoAt: new Date().toISOString()
+    });
+  } catch {
+    // Silencioso en caso de interrupción
+  }
+}
+
+function showNfcScanBanner({ addedMl, label, totalMl, thermoMl, debounced = false }) {
+  const banner = $("nfc-scan-banner");
+  const titleEl = $("nfc-scan-title");
+  const subtitleEl = $("nfc-scan-subtitle");
+  const termos = thermoMl > 0 ? (totalMl / thermoMl).toFixed(2) : "0.00";
+
+  if (debounced) {
+    titleEl.textContent = "⚡ Lectura NFC reciente detectada (sin duplicar)";
+    subtitleEl.textContent = `Total acumulado en esta sesión: ${formatMl(totalMl)} mL (${termos} termos)`;
+  } else {
+    titleEl.textContent = `⚡ Chip NFC Escaneado: +${formatMl(addedMl)} mL (+${label})`;
+    subtitleEl.textContent = `Total acumulado en esta sesión: ${formatMl(totalMl)} mL (${termos} termos)`;
+  }
+
+  banner.classList.remove("hidden");
+}
+
+async function applyNfcAutoScan(athleteId, scanFraction, { bypassDebounce = false } = {}) {
+  const profile = appState.athleteProfile;
+  const draft = appState.draft;
+  if (!profile || !draft || !(scanFraction > 0)) return false;
+
+  const now = Date.now();
+  let lastScanMs = 0;
+  try {
+    lastScanMs = Number(localStorage.getItem(`${LAST_SCAN_PREFIX}${athleteId}`) || 0);
+  } catch {
+    lastScanMs = 0;
+  }
+
+  const thermoMl = Number(profile.capacidadTermoMl) || DEFAULT_THERMO_ML;
+
+  if (!bypassDebounce && now - lastScanMs < NFC_DEBOUNCE_MS) {
+    showNfcScanBanner({
+      addedMl: 0,
+      label: "",
+      totalMl: Number(draft.consumoMl) || 0,
+      thermoMl,
+      debounced: true
+    });
+    return false;
+  }
+
+  try {
+    localStorage.setItem(`${LAST_SCAN_PREFIX}${athleteId}`, String(now));
+  } catch {
+    // Ignorar error de almacenamiento
+  }
+
+  const label = getScanFractionLabel(scanFraction);
+  const addedMl = Number((thermoMl * scanFraction).toFixed(1));
+
+  draft.intakeLogs.push({
+    id: now,
+    fractionLabel: label,
+    ml: addedMl,
+    viaNfc: true
+  });
+  draft.consumoMl = Number(
+    draft.intakeLogs.reduce((sum, item) => sum + item.ml, 0).toFixed(1)
+  );
+  appState.lastAutoScanIndex = draft.intakeLogs.length - 1;
+
+  // Iniciar cronómetro automáticamente si estaba en ceros
+  if (!draft.timerRunning && !(Number(draft.timerAccumulatedMs) > 0)) {
+    draft.timerStartMs = now;
+    draft.timerRunning = true;
+  }
+
+  draft.activePhase = 2;
+  saveDraft(athleteId, draft);
+
+  await syncAthleteLiveProgress(profile, draft);
+
+  showNfcScanBanner({
+    addedMl,
+    label,
+    totalMl: draft.consumoMl,
+    thermoMl,
+    debounced: false
+  });
+
+  return true;
+}
+
+async function initAthleteView(athleteId, { isNfcEntry = false, nfcParam = null } = {}) {
   let profile = await HydroTagDB.getAthlete(athleteId);
   if (!profile) {
     profile = await HydroTagDB.saveAthlete({
       id: athleteId,
       nombre: "",
       deporte: "",
-      capacidadTermoMl: DEFAULT_THERMO_ML
+      capacidadTermoMl: DEFAULT_THERMO_ML,
+      autoScanFraction: 1
     });
   }
 
   appState.athleteProfile = profile;
   appState.draft = loadDraft(athleteId);
+  appState.lastAutoScanIndex = null;
+
+  $("nfc-scan-banner").classList.add("hidden");
+
+  if (isNfcEntry) {
+    // Reemplazar URL con view=1 inmediatamente para evitar duplicados al recargar (F5)
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.search = "";
+    cleanUrl.hash = "";
+    cleanUrl.searchParams.set("id", athleteId);
+    cleanUrl.searchParams.set("view", "1");
+    window.history.replaceState({}, "", cleanUrl.toString());
+
+    const paramFraction =
+      nfcParam !== null && nfcParam !== "" && Number.isFinite(Number(nfcParam))
+        ? Number(nfcParam)
+        : null;
+    const defaultFraction =
+      profile.autoScanFraction !== undefined ? Number(profile.autoScanFraction) : 1;
+    const fractionToApply = paramFraction !== null ? paramFraction : defaultFraction;
+
+    if (fractionToApply > 0) {
+      await applyNfcAutoScan(athleteId, fractionToApply, { bypassDebounce: false });
+    }
+  }
 
   $("ath-id-label").textContent = profile.id;
   $("ath-name-display").textContent = profile.nombre || `Atleta ${profile.id}`;
@@ -861,6 +1022,7 @@ async function initAthleteView(athleteId) {
   $("input-orina-ml").value = appState.draft.orinaEvacuadaMl ?? 0;
 
   updateDynamicThermoUI();
+  renderAutoScanButtons();
   renderArmstrongScale();
   renderThirstButtons();
   updatePreHydrationAlert();
@@ -1024,7 +1186,7 @@ function renderAdminDashboard() {
     .join("");
 
   tbody.querySelectorAll("[data-open-id]").forEach((btn) => {
-    btn.addEventListener("click", () => navigateToParams({ id: btn.dataset.openId }));
+    btn.addEventListener("click", () => navigateToParams({ id: btn.dataset.openId, view: "1" }));
   });
 
   tbody.querySelectorAll("[data-delete-session]").forEach((btn) => {
@@ -1108,11 +1270,72 @@ function exportSessionsToCsv() {
   showToast(`CSV exportado (${rowsToExport.length} registros)`, "success");
 }
 
+function renderAdminLiveAthletes() {
+  const wrapper = $("admin-live-wrapper");
+  const grid = $("admin-live-grid");
+  if (!wrapper || !grid) return;
+
+  const active = (appState.adminLiveAthletes || []).filter(
+    (ath) => (Number(ath.consumoEnCursoMl) || 0) > 0
+  );
+
+  if (active.length === 0) {
+    wrapper.classList.add("hidden");
+    grid.innerHTML = "";
+    return;
+  }
+
+  wrapper.classList.remove("hidden");
+  grid.innerHTML = active
+    .map((ath) => {
+      const safeId = escapeHtml(ath.id);
+      const safeName = escapeHtml(ath.nombre || `Atleta ${ath.id}`);
+      const ml = formatMl(ath.consumoEnCursoMl || 0);
+      const tomas = Number(ath.tomasEnCurso) || 0;
+      const scanTime = ath.ultimoEscaneoAt
+        ? new Date(ath.ultimoEscaneoAt).toLocaleTimeString("es-MX", {
+            hour: "2-digit",
+            minute: "2-digit"
+          })
+        : "--";
+
+      return `
+        <button type="button" data-live-open-id="${safeId}"
+          class="tap-btn flex items-center justify-between gap-2 rounded-2xl border border-cyan-500/30 bg-slate-950/85 p-3 text-left transition hover:border-[#00E5FF]">
+          <div class="min-w-0">
+            <div class="flex items-center gap-1.5">
+              <span class="h-2 w-2 animate-pulse rounded-full bg-emerald-400"></span>
+              <span class="font-mono text-xs font-black text-cyan-300">${safeId}</span>
+            </div>
+            <p class="mt-0.5 truncate text-xs font-bold text-white">${safeName}</p>
+            <p class="text-[11px] text-slate-400">${tomas} toma${tomas === 1 ? "" : "s"} • ${escapeHtml(scanTime)}</p>
+          </div>
+          <div class="shrink-0 text-right">
+            <div class="tabular-nums text-base font-black text-[#00E5FF]">${ml} mL</div>
+            <span class="text-[10px] font-bold text-slate-400">En curso</span>
+          </div>
+        </button>
+      `;
+    })
+    .join("");
+
+  grid.querySelectorAll("[data-live-open-id]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      navigateToParams({ id: btn.dataset.liveOpenId, view: "1" });
+    });
+  });
+}
+
 async function initAdminView() {
   appState.adminUnsubscribe = await HydroTagDB.subscribeSessions((sessions) => {
     appState.adminSessions = sessions;
     populateAdminAthleteFilter(sessions);
     renderAdminDashboard();
+  });
+
+  appState.adminAthletesUnsubscribe = await HydroTagDB.subscribeAthletes((athletes) => {
+    appState.adminLiveAthletes = athletes;
+    renderAdminLiveAthletes();
   });
 }
 
@@ -1125,7 +1348,7 @@ function bindEvents() {
   $("btn-go-home").addEventListener("click", () => navigateToParams({}));
   $("btn-go-admin").addEventListener("click", () => {
     if (appState.route === "admin") {
-      navigateToParams(appState.athleteId ? { id: appState.athleteId } : {});
+      navigateToParams(appState.athleteId ? { id: appState.athleteId, view: "1" } : {});
     } else {
       navigateToParams({ admin: "true" });
     }
@@ -1216,7 +1439,7 @@ function bindEvents() {
       capacidadTermoMl: thermoMl
     });
 
-    navigateToParams({ id: cleanId });
+    navigateToParams({ id: cleanId, view: "1" });
   });
 
   // Vista Atleta: perfil & termo
@@ -1260,6 +1483,85 @@ function bindEvents() {
     appState.thermoSaveTimeout = setTimeout(() => {
       updateThermoCapacity(val, false);
     }, 350);
+  });
+
+  // Configuración de acción automática NFC & Simulación
+  document.querySelectorAll(".ath-autoscan-btn").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (!appState.athleteProfile) return;
+      const scanVal = Number(btn.dataset.scan);
+      appState.athleteProfile.autoScanFraction = Number.isFinite(scanVal) ? scanVal : 1;
+      renderAutoScanButtons();
+      await HydroTagDB.saveAthlete(appState.athleteProfile);
+      const desc = scanVal > 0 ? `+${getScanFractionLabel(scanVal)}` : "Solo abrir (sin sumar)";
+      showToast(`Acción al escanear NFC: ${desc}`, "success");
+    });
+  });
+
+  $("btn-simulate-nfc").addEventListener("click", async () => {
+    if (!appState.athleteId || !appState.athleteProfile) return;
+    const defaultFraction =
+      appState.athleteProfile.autoScanFraction !== undefined
+        ? Number(appState.athleteProfile.autoScanFraction)
+        : 1;
+    const fraction = defaultFraction > 0 ? defaultFraction : 1;
+    await applyNfcAutoScan(appState.athleteId, fraction, { bypassDebounce: true });
+    updateIntakeUI();
+    startTimerLoop();
+    setActivePhase(2);
+    showToast("Toque NFC simulado", "success");
+  });
+
+  // Botones del Banner NFC
+  function adjustLastNfcIntake(newFraction, newLabel) {
+    const logs = appState.draft?.intakeLogs;
+    if (!logs || logs.length === 0) return;
+    const idx =
+      appState.lastAutoScanIndex !== null && logs[appState.lastAutoScanIndex]
+        ? appState.lastAutoScanIndex
+        : logs.length - 1;
+    const thermoMl = Number(appState.athleteProfile?.capacidadTermoMl) || DEFAULT_THERMO_ML;
+    const newMl = Number((thermoMl * newFraction).toFixed(1));
+    logs[idx] = { ...logs[idx], fractionLabel: newLabel, ml: newMl };
+    appState.draft.consumoMl = Number(logs.reduce((sum, item) => sum + item.ml, 0).toFixed(1));
+    saveDraft(appState.athleteId, appState.draft);
+    updateIntakeUI();
+    syncAthleteLiveProgress(appState.athleteProfile, appState.draft);
+    showNfcScanBanner({
+      addedMl: newMl,
+      label: newLabel,
+      totalMl: appState.draft.consumoMl,
+      thermoMl,
+      debounced: false
+    });
+    showToast(`Ajustado a +${formatMl(newMl)} mL (+${newLabel})`, "success");
+  }
+
+  $("btn-nfc-adj-half").addEventListener("click", () => adjustLastNfcIntake(0.5, "1/2 Termo"));
+  $("btn-nfc-adj-quarter").addEventListener("click", () => adjustLastNfcIntake(0.25, "1/4 Termo"));
+
+  $("btn-nfc-undo-goto-p1").addEventListener("click", async () => {
+    const logs = appState.draft?.intakeLogs;
+    if (logs && logs.length > 0) {
+      const idx =
+        appState.lastAutoScanIndex !== null && logs[appState.lastAutoScanIndex]
+          ? appState.lastAutoScanIndex
+          : logs.length - 1;
+      logs.splice(idx, 1);
+      appState.lastAutoScanIndex = null;
+      appState.draft.consumoMl = Number(logs.reduce((sum, item) => sum + item.ml, 0).toFixed(1));
+      saveDraft(appState.athleteId, appState.draft);
+      updateIntakeUI();
+      await syncAthleteLiveProgress(appState.athleteProfile, appState.draft);
+    }
+    $("nfc-scan-banner").classList.add("hidden");
+    setActivePhase(1);
+    $("input-peso-pre").focus();
+    showToast("Registro NFC deshecho. Registra tu peso inicial.", "info");
+  });
+
+  $("btn-nfc-dismiss").addEventListener("click", () => {
+    $("nfc-scan-banner").classList.add("hidden");
   });
 
   // Stepper fases
@@ -1370,6 +1672,7 @@ function bindEvents() {
     );
     saveDraft(appState.athleteId, appState.draft);
     updateIntakeUI();
+    syncAthleteLiveProgress(appState.athleteProfile, appState.draft);
     showToast(`+${formatMl(addedMl)} mL registrados`, "success");
   }
 
@@ -1381,9 +1684,11 @@ function bindEvents() {
     const logs = appState.draft.intakeLogs;
     if (!logs || logs.length === 0) return;
     const removed = logs.pop();
+    appState.lastAutoScanIndex = null;
     appState.draft.consumoMl = Number(logs.reduce((sum, item) => sum + item.ml, 0).toFixed(1));
     saveDraft(appState.athleteId, appState.draft);
     updateIntakeUI();
+    syncAthleteLiveProgress(appState.athleteProfile, appState.draft);
     showToast(`Registro deshecho (-${formatMl(removed.ml)} mL)`, "info");
   });
 
@@ -1480,6 +1785,13 @@ function bindEvents() {
     };
 
     await HydroTagDB.saveSession(sessionRecord);
+    if (appState.athleteProfile) {
+      await HydroTagDB.saveAthlete({
+        ...appState.athleteProfile,
+        consumoEnCursoMl: 0,
+        tomasEnCurso: 0
+      });
+    }
     appState.draft.lastResult = sessionRecord;
     saveDraft(appState.athleteId, appState.draft);
 
@@ -1494,10 +1806,11 @@ function bindEvents() {
     $("phase3-results").scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
-  $("btn-new-session").addEventListener("click", () => {
+  $("btn-new-session").addEventListener("click", async () => {
     appState.draft = createDefaultDraft(appState.athleteId);
     saveDraft(appState.athleteId, appState.draft);
-    initAthleteView(appState.athleteId);
+    await syncAthleteLiveProgress(appState.athleteProfile, appState.draft);
+    await initAthleteView(appState.athleteId, { isNfcEntry: false });
     showToast("Nueva sesión iniciada", "info");
   });
 
