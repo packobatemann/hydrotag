@@ -248,6 +248,9 @@ export const HydroTagDB = {
       consumoEnCursoMl: Number(profile.consumoEnCursoMl ?? prev.consumoEnCursoMl) || 0,
       tomasEnCurso: Number(profile.tomasEnCurso ?? prev.tomasEnCurso) || 0,
       ultimoEscaneoAt: profile.ultimoEscaneoAt !== undefined ? profile.ultimoEscaneoAt : (prev.ultimoEscaneoAt || null),
+      recordatorioOn:
+        profile.recordatorioOn !== undefined ? Boolean(profile.recordatorioOn) : prev.recordatorioOn !== undefined ? Boolean(prev.recordatorioOn) : true,
+      recordatorioMin: Math.min(60, Math.max(1, Number(profile.recordatorioMin ?? prev.recordatorioMin) || 10)),
       updatedAt: new Date().toISOString()
     };
 
