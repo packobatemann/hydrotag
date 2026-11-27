@@ -83,10 +83,10 @@ function createSessionId(athleteId) {
   return `SES_${athleteId}_${stamp}_${rand}`;
 }
 
-// Chips: seleccionado = negro, no seleccionado = blanco con borde gris
+// Chips: seleccionado = oscuro, no seleccionado = blanco con borde sutil
 function setChip(btn, active) {
-  const on = ["border-gray-900", "bg-gray-900", "text-white"];
-  const off = ["border-gray-300", "bg-white", "text-gray-700"];
+  const on = ["border-slate-900", "bg-slate-900", "text-white", "shadow-sm"];
+  const off = ["border-slate-200", "bg-white", "text-slate-700"];
   if (active) {
     btn.classList.remove(...off);
     btn.classList.add(...on);
@@ -94,6 +94,24 @@ function setChip(btn, active) {
     btn.classList.remove(...on);
     btn.classList.add(...off);
   }
+}
+
+function replayAnimation(el, animClass) {
+  if (!el) return;
+  el.classList.remove(animClass);
+  void el.offsetWidth;
+  el.classList.add(animClass);
+}
+
+function setDrawerOpen(open) {
+  const drawer = $("profile-edit-drawer");
+  const chevron = $("profile-edit-chevron");
+  const toggleBtn = $("btn-toggle-profile-edit");
+  if (!drawer) return;
+  drawer.classList.toggle("is-open", open);
+  drawer.setAttribute("aria-hidden", open ? "false" : "true");
+  if (toggleBtn) toggleBtn.setAttribute("aria-expanded", open ? "true" : "false");
+  if (chevron) chevron.classList.toggle("rotate-180", open);
 }
 
 function createDefaultDraft(athleteId) {
@@ -156,6 +174,7 @@ const appState = {
   adminSessions: [],
   adminLiveAthletes: [],
   lastAutoScanIndex: null,
+  lastIntakeDisplayedMl: null,
   deferredInstallPrompt: null,
   thermoSaveTimeout: null,
   suggestion: null
@@ -169,9 +188,13 @@ let toastTimeout = null;
 function showToast(message) {
   const banner = $("toast-banner");
   banner.textContent = message;
-  banner.classList.remove("hidden");
+  banner.classList.remove("opacity-0", "translate-y-2");
+  banner.classList.add("opacity-100", "translate-y-0");
   clearTimeout(toastTimeout);
-  toastTimeout = setTimeout(() => banner.classList.add("hidden"), 2800);
+  toastTimeout = setTimeout(() => {
+    banner.classList.remove("opacity-100", "translate-y-0");
+    banner.classList.add("opacity-0", "translate-y-2");
+  }, 2600);
 }
 
 async function copyTextToClipboard(text) {
@@ -204,11 +227,11 @@ function updateDbStatusUI(info) {
   const text = $("db-status-text");
   const adminSyncMode = $("admin-sync-mode");
   if (info.mode === "firebase") {
-    dot.className = "mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-green-500 align-middle";
+    dot.className = "mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-emerald-500 align-middle";
     text.textContent = "Guardado en la nube";
     adminSyncMode.textContent = "Datos en la nube (Firebase).";
   } else {
-    dot.className = "mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-gray-400 align-middle";
+    dot.className = "mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-slate-400 align-middle";
     text.textContent = "Guardado en este dispositivo";
     adminSyncMode.textContent = "Datos guardados en este dispositivo.";
   }
@@ -341,7 +364,9 @@ async function resolveRoute() {
 
   if (isAdmin) {
     appState.route = "admin";
-    $("view-admin").classList.remove("hidden");
+    const viewAdmin = $("view-admin");
+    viewAdmin.classList.remove("hidden");
+    replayAnimation(viewAdmin, "view-animate");
     await initAdminView();
     return;
   }
@@ -349,14 +374,18 @@ async function resolveRoute() {
   if (cleanId) {
     appState.route = "athlete";
     appState.athleteId = cleanId;
-    $("view-athlete").classList.remove("hidden");
+    const viewAth = $("view-athlete");
+    viewAth.classList.remove("hidden");
+    replayAnimation(viewAth, "view-animate");
     await initAthleteView(cleanId, { isNfcEntry: !isManualView, nfcParam });
     return;
   }
 
   appState.route = "onboarding";
   appState.athleteId = null;
-  $("view-onboarding").classList.remove("hidden");
+  const viewOnb = $("view-onboarding");
+  viewOnb.classList.remove("hidden");
+  replayAnimation(viewOnb, "view-animate");
   await initOnboardingView();
 }
 
@@ -379,21 +408,32 @@ async function renderSavedAthletesList() {
   $("onb-athletes-count").textContent = String(athletes.length);
 
   if (athletes.length === 0) {
-    container.innerHTML = `<p class="p-4 text-sm text-gray-500">Todavía no hay pacientes guardados.</p>`;
+    container.innerHTML = `<p class="py-3 text-sm text-slate-400">Todavía no hay pacientes guardados.</p>`;
     return;
   }
 
   container.innerHTML = athletes
     .map((ath) => {
       const safeId = escapeHtml(ath.id);
-      const safeName = escapeHtml(ath.nombre || "Sin nombre");
+      const rawName = (ath.nombre || "").trim();
+      const safeName = escapeHtml(rawName || ath.id);
+      const initials = escapeHtml((rawName || ath.id).slice(0, 2).toUpperCase());
+      const sportPart = ath.deporte ? ` · ${escapeHtml(ath.deporte)}` : "";
       return `
-        <button type="button" data-open-athlete="${safeId}" class="flex w-full items-center justify-between gap-3 px-4 py-3 text-left">
-          <span class="min-w-0">
-            <span class="block truncate text-sm font-medium">${safeName}</span>
-            <span class="block text-xs text-gray-500">${safeId} · termo ${formatMl(ath.capacidadTermoMl || DEFAULT_THERMO_ML)} mL</span>
+        <button type="button" data-open-athlete="${safeId}" class="group tap-action flex w-full items-center justify-between gap-3 py-3 text-left">
+          <span class="flex min-w-0 items-center gap-3">
+            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-700">${initials}</span>
+            <span class="min-w-0">
+              <span class="block truncate text-sm font-semibold text-slate-900">${safeName}</span>
+              <span class="block truncate text-xs text-slate-500">${safeId}${sportPart} · ${formatMl(ath.capacidadTermoMl || DEFAULT_THERMO_ML)} mL</span>
+            </span>
           </span>
-          <span class="text-sm text-gray-400">Abrir</span>
+          <span class="inline-flex items-center gap-1 text-xs font-semibold text-slate-400 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-slate-900">
+            Abrir
+            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+            </svg>
+          </span>
         </button>`;
     })
     .join("");
@@ -425,11 +465,14 @@ function renderArmstrongScale() {
 
   grid.innerHTML = ARMSTRONG_SCALE.map((item) => {
     const active = item.score === selected;
-    const textClass = item.textDark ? "text-gray-900" : "text-white";
-    const ring = active ? "ring-2 ring-gray-900 ring-offset-2" : "";
+    const textClass = item.textDark ? "text-slate-900" : "text-white";
+    const ring = active ? "ring-2 ring-slate-900 ring-offset-2 scale-[1.03] shadow-sm" : "opacity-90 hover:opacity-100";
+    const check = active
+      ? `<span class="absolute right-1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-slate-900 text-white"><svg class="h-2.5 w-2.5" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg></span>`
+      : "";
     return `<button type="button" data-armstrong="${item.score}" aria-label="Color ${item.score}: ${escapeHtml(item.label)}"
       style="background-color:${item.color}"
-      class="min-h-[56px] rounded-xl border border-black/10 text-lg font-semibold ${textClass} ${ring}">${item.score}</button>`;
+      class="tap-action relative min-h-[54px] rounded-xl border border-black/10 text-base font-bold ${textClass} ${ring}">${check}${item.score}</button>`;
   }).join("");
 
   grid.querySelectorAll("[data-armstrong]").forEach((btn) => {
@@ -512,10 +555,20 @@ function updateIntakeUI() {
   const thermoMl = getThermoMl();
   const totalMl = Number(draft.consumoMl) || 0;
 
-  $("intake-total-ml").textContent = formatMl(totalMl);
+  const totalEl = $("intake-total-ml");
+  totalEl.textContent = formatMl(totalMl);
+  if (appState.lastIntakeDisplayedMl !== null && appState.lastIntakeDisplayedMl !== totalMl) {
+    replayAnimation(totalEl, "value-bump");
+  }
+  appState.lastIntakeDisplayedMl = totalMl;
+
   $("intake-total-liters").textContent = `${(totalMl / 1000).toFixed(2)} L`;
   $("intake-thermos-count").textContent = `${(thermoMl > 0 ? totalMl / thermoMl : 0).toFixed(2)} termos`;
   $("p3-preview-intake").textContent = `${formatMl(totalMl)} mL`;
+
+  const fillPct =
+    totalMl <= 0 ? 0 : Math.abs(totalMl % thermoMl) < 0.01 ? 100 : ((totalMl % thermoMl) / thermoMl) * 100;
+  $("intake-progress-bar").style.width = `${Math.min(100, Math.max(0, fillPct)).toFixed(1)}%`;
 
   const logs = draft.intakeLogs || [];
   const undoBtn = $("btn-drink-undo");
@@ -528,25 +581,36 @@ function updateIntakeUI() {
   }
 
   $("intake-logs-list").innerHTML = logs
-    .map((entry, idx) => `<span class="rounded-md bg-gray-100 px-2 py-1">${idx + 1}. +${formatMl(entry.ml)} mL</span>`)
+    .map(
+      (entry, idx) =>
+        `<span class="inline-flex items-center rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">${idx + 1}. +${formatMl(entry.ml)} mL</span>`
+    )
     .join("");
 }
 
 function setActivePhase(phaseNum) {
   const phase = Number(phaseNum) || 1;
+  const prevPhase = Number(appState.draft.activePhase);
   appState.draft.activePhase = phase;
   saveDraft(appState.athleteId, appState.draft);
+
+  const indicator = $("phase-pill-indicator");
+  if (indicator) {
+    indicator.style.transform = `translateX(${(phase - 1) * 100}%)`;
+  }
 
   [1, 2, 3].forEach((p) => {
     const tab = $(`tab-phase-${p}`);
     const panel = $(`panel-phase-${p}`);
     if (p === phase) {
-      tab.classList.remove("border-transparent", "text-gray-400");
-      tab.classList.add("border-gray-900", "text-gray-900");
+      tab.classList.remove("text-slate-500", "hover:text-slate-700");
+      tab.classList.add("text-slate-900");
+      const wasHidden = panel.classList.contains("hidden");
       panel.classList.remove("hidden");
+      if (wasHidden || prevPhase !== phase) replayAnimation(panel, "phase-enter");
     } else {
-      tab.classList.add("border-transparent", "text-gray-400");
-      tab.classList.remove("border-gray-900", "text-gray-900");
+      tab.classList.add("text-slate-500", "hover:text-slate-700");
+      tab.classList.remove("text-slate-900");
       panel.classList.add("hidden");
     }
   });
@@ -578,14 +642,21 @@ function renderStopwatch() {
   const elapsed = getElapsedStopwatchMs();
   $("stopwatch-display").textContent = formatStopwatch(elapsed);
 
+  const liveDot = $("timer-live-dot");
+  if (liveDot) {
+    liveDot.className = draft.timerRunning
+      ? "h-2 w-2 rounded-full bg-emerald-500 animate-pulse transition-colors"
+      : "h-2 w-2 rounded-full bg-slate-300 transition-colors";
+  }
+
   const btn = $("btn-timer-toggle");
-  const base = "min-h-[52px] rounded-xl text-base font-semibold ";
+  const base = "tap-action min-h-[50px] rounded-xl text-sm font-semibold ";
   if (draft.timerRunning) {
     btn.textContent = "Pausar";
-    btn.className = base + "border border-gray-900 bg-white text-gray-900";
+    btn.className = base + "border border-slate-900 bg-white text-slate-900 hover:bg-slate-50";
   } else {
     btn.textContent = elapsed > 0 ? "Continuar" : "Iniciar";
-    btn.className = base + "bg-gray-900 text-white";
+    btn.className = base + "bg-slate-900 text-white shadow-sm hover:bg-slate-800";
   }
 }
 
@@ -600,14 +671,19 @@ function renderReminderUI() {
   if (document.activeElement !== input) input.value = min;
 
   const nextEl = $("reminder-next");
+  const bar = $("reminder-progress-bar");
+  const intervalMs = min * 60000;
+  const elapsed = getElapsedStopwatchMs();
+
   if (!on) {
     nextEl.textContent = "Pitido desactivado";
+    if (bar) bar.style.width = "0%";
   } else if (!appState.draft.timerRunning) {
     nextEl.textContent = `Sonará cada ${min} min cuando inicies el cronómetro`;
+    if (bar) bar.style.width = elapsed > 0 ? `${(((elapsed % intervalMs) / intervalMs) * 100).toFixed(1)}%` : "0%";
   } else {
-    const intervalMs = min * 60000;
-    const elapsed = getElapsedStopwatchMs();
     nextEl.textContent = `Próximo pitido en ${formatMinSec(intervalMs - (elapsed % intervalMs))}`;
+    if (bar) bar.style.width = `${(((elapsed % intervalMs) / intervalMs) * 100).toFixed(1)}%`;
   }
 
   $("reminder-audio-hint").classList.toggle("hidden", !(on && appState.draft.timerRunning && !audioReady()));
@@ -747,31 +823,37 @@ function renderPhase3Results() {
   let badgeText;
   let msg;
   if (pct > 2) {
-    cardCls = "border-red-300 bg-red-50 text-red-900";
-    badgeCls = "bg-red-600 text-white";
+    cardCls = "border-rose-200 bg-rose-50/90 text-rose-950";
+    badgeCls = "bg-rose-600 text-white";
     badgeText = "Rojo · más de 2%";
     msg = "Perdiste más del 2% de tu peso. A partir de aquí baja el rendimiento físico y mental. Repón líquidos cuanto antes.";
   } else if (pct >= 1) {
-    cardCls = "border-amber-300 bg-amber-50 text-amber-900";
-    badgeCls = "bg-amber-500 text-gray-900";
+    cardCls = "border-amber-200 bg-amber-50/90 text-amber-950";
+    badgeCls = "bg-amber-500 text-slate-900";
     badgeText = "Amarillo · 1% a 2%";
     msg = "Deshidratación leve. Toma un poco más de agua durante el próximo entrenamiento.";
   } else {
-    cardCls = "border-green-300 bg-green-50 text-green-900";
-    badgeCls = "bg-green-600 text-white";
+    cardCls = "border-emerald-200 bg-emerald-50/90 text-emerald-950";
+    badgeCls = "bg-emerald-600 text-white";
     badgeText = "Verde · menos de 1%";
     msg =
       pct < 0
         ? "Subiste de peso: tomaste más de lo que sudaste. No bebas de más."
         : "Muy bien, te mantuviste hidratado durante el entrenamiento.";
   }
-  card.className = `rounded-2xl border p-5 ${cardCls}`;
+  card.className = `stagger-1 rounded-2xl border p-5 shadow-sm ${cardCls}`;
   badge.className = `rounded-full px-3 py-1 text-xs font-semibold ${badgeCls}`;
   badge.textContent = badgeText;
   $("res-dehydration-msg").textContent = msg;
   $("res-dehydration-pct").textContent = `${pct.toFixed(2)}%`;
   $("res-weight-diff").textContent =
     diffKg >= 0 ? `(−${diffKg.toFixed(2)} kg)` : `(+${Math.abs(diffKg).toFixed(2)} kg)`;
+
+  const pinEl = $("res-dehydration-pin");
+  if (pinEl) {
+    const pinPos = Math.min(97, Math.max(3, (pct / 3) * 100));
+    pinEl.style.left = `${pinPos.toFixed(1)}%`;
+  }
 
   const lh = Number(res.tasaSudoracionLh);
   $("res-sweat-lh").textContent = lh.toFixed(2);
@@ -908,6 +990,7 @@ async function initAthleteView(athleteId, { isNfcEntry = false, nfcParam = null 
   appState.athleteProfile = profile;
   appState.draft = loadDraft(athleteId);
   appState.lastAutoScanIndex = null;
+  appState.lastIntakeDisplayedMl = Number(appState.draft.consumoMl) || 0;
   $("nfc-scan-banner").classList.add("hidden");
   $("reminder-alert").classList.add("hidden");
 
@@ -931,7 +1014,7 @@ async function initAthleteView(athleteId, { isNfcEntry = false, nfcParam = null 
   $("ath-sport-display").textContent = profile.deporte || "";
   $("ath-name-input").value = profile.nombre || "";
   $("ath-sport-input").value = profile.deporte || "";
-  $("profile-edit-drawer").classList.add("hidden");
+  setDrawerOpen(false);
 
   $("input-peso-pre").value = appState.draft.pesoPreKg || "";
   $("input-duracion-min").value = appState.draft.duracionMin || "";
@@ -1017,9 +1100,9 @@ function renderAdminDashboard() {
       const pct = Number(s.deshidratacionPct) || 0;
       const isRed = pct > 2;
       const isYellow = pct >= 1 && pct <= 2;
-      const rowCls = isRed ? "bg-red-50" : "";
-      let pctBadge = `<span class="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-800">${pct.toFixed(2)}%</span>`;
-      if (isRed) pctBadge = `<span class="rounded-full bg-red-600 px-2.5 py-0.5 text-xs font-semibold text-white">${pct.toFixed(2)}% · &gt;2%</span>`;
+      const rowCls = isRed ? "bg-rose-50/75 hover:bg-rose-50 transition-colors" : "hover:bg-slate-50/80 transition-colors";
+      let pctBadge = `<span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">${pct.toFixed(2)}%</span>`;
+      if (isRed) pctBadge = `<span class="rounded-full bg-rose-600 px-2.5 py-0.5 text-xs font-semibold text-white">${pct.toFixed(2)}% · &gt;2%</span>`;
       else if (isYellow) pctBadge = `<span class="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800">${pct.toFixed(2)}%</span>`;
 
       const armstrong = ARMSTRONG_SCALE.find((a) => a.score === Number(s.orinaArmstrong)) || ARMSTRONG_SCALE[1];
@@ -1032,22 +1115,22 @@ function renderAdminDashboard() {
       return `
         <tr class="${rowCls}">
           <td class="whitespace-nowrap px-4 py-3">
-            <button type="button" data-open-id="${safeId}" class="font-medium underline">${safeId}</button>
-            ${safeName ? `<div class="text-xs text-gray-500">${safeName}</div>` : ""}
+            <button type="button" data-open-id="${safeId}" class="font-semibold text-slate-900 underline">${safeId}</button>
+            ${safeName ? `<div class="text-xs text-slate-500">${safeName}</div>` : ""}
           </td>
-          <td class="whitespace-nowrap px-3 py-3 text-gray-600">${escapeHtml(dateStr)}</td>
-          <td class="whitespace-nowrap px-3 py-3 tabular-nums">${formatMl(s.capacidadTermoMl)} mL</td>
-          <td class="whitespace-nowrap px-3 py-3 tabular-nums">${Number(s.pesoPreKg).toFixed(1)} → ${Number(s.pesoPostKg).toFixed(1)} kg</td>
-          <td class="whitespace-nowrap px-3 py-3 tabular-nums">${formatMl(s.consumoMl)} mL</td>
-          <td class="whitespace-nowrap px-3 py-3 tabular-nums">${Number(s.duracionMin)} min</td>
-          <td class="whitespace-nowrap px-3 py-3 tabular-nums font-medium">${Number(s.tasaSudoracionLh).toFixed(2)} L/h</td>
+          <td class="whitespace-nowrap px-3 py-3 text-slate-600">${escapeHtml(dateStr)}</td>
+          <td class="whitespace-nowrap px-3 py-3 tabular-nums text-slate-700">${formatMl(s.capacidadTermoMl)} mL</td>
+          <td class="whitespace-nowrap px-3 py-3 tabular-nums text-slate-700">${Number(s.pesoPreKg).toFixed(1)} → ${Number(s.pesoPostKg).toFixed(1)} kg</td>
+          <td class="whitespace-nowrap px-3 py-3 tabular-nums text-slate-700">${formatMl(s.consumoMl)} mL</td>
+          <td class="whitespace-nowrap px-3 py-3 tabular-nums text-slate-700">${Number(s.duracionMin)} min</td>
+          <td class="whitespace-nowrap px-3 py-3 tabular-nums font-semibold text-slate-900">${Number(s.tasaSudoracionLh).toFixed(2)} L/h</td>
           <td class="whitespace-nowrap px-3 py-3">${pctBadge}</td>
-          <td class="whitespace-nowrap px-3 py-3">
+          <td class="whitespace-nowrap px-3 py-3 text-slate-700">
             <span class="mr-1.5 inline-block h-3 w-3 rounded-full border border-black/10 align-middle" style="background-color:${armstrong.color}"></span>${Number(s.orinaArmstrong)}/8
           </td>
-          <td class="whitespace-nowrap px-3 py-3 tabular-nums">${Number(s.metaMinMl).toLocaleString("es-MX")}–${Number(s.metaMaxMl).toLocaleString("es-MX")} mL</td>
+          <td class="whitespace-nowrap px-3 py-3 tabular-nums text-slate-700">${Number(s.metaMinMl).toLocaleString("es-MX")}–${Number(s.metaMaxMl).toLocaleString("es-MX")} mL</td>
           <td class="whitespace-nowrap px-3 py-3 text-right">
-            <button type="button" data-delete-session="${escapeHtml(s.sessionId)}" class="text-xs text-gray-400 underline">Borrar</button>
+            <button type="button" data-delete-session="${escapeHtml(s.sessionId)}" class="text-xs font-medium text-slate-400 underline hover:text-rose-600">Borrar</button>
           </td>
         </tr>`;
     })
@@ -1135,12 +1218,12 @@ function renderAdminLiveAthletes() {
     .map((ath) => {
       const tomas = Number(ath.tomasEnCurso) || 0;
       return `
-        <button type="button" data-live-open-id="${escapeHtml(ath.id)}" class="flex items-center justify-between gap-2 rounded-xl border border-gray-200 p-3 text-left">
+        <button type="button" data-live-open-id="${escapeHtml(ath.id)}" class="tap-action flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50/70 p-3 text-left hover:border-slate-300 hover:bg-white">
           <span class="min-w-0">
-            <span class="block truncate text-sm font-medium">${escapeHtml(ath.nombre || ath.id)}</span>
-            <span class="block text-xs text-gray-500">${escapeHtml(ath.id)} · ${tomas} toma${tomas === 1 ? "" : "s"}</span>
+            <span class="block truncate text-sm font-semibold text-slate-900">${escapeHtml(ath.nombre || ath.id)}</span>
+            <span class="block text-xs text-slate-500">${escapeHtml(ath.id)} · ${tomas} toma${tomas === 1 ? "" : "s"}</span>
           </span>
-          <span class="tabular-nums text-sm font-semibold">${formatMl(ath.consumoEnCursoMl)} mL</span>
+          <span class="tabular-nums text-sm font-bold text-slate-900">${formatMl(ath.consumoEnCursoMl)} mL</span>
         </button>`;
     })
     .join("");
@@ -1248,7 +1331,10 @@ function bindEvents() {
   });
 
   // Paciente: ajustes
-  $("btn-toggle-profile-edit").addEventListener("click", () => $("profile-edit-drawer").classList.toggle("hidden"));
+  $("btn-toggle-profile-edit").addEventListener("click", () => {
+    const isOpen = $("profile-edit-drawer").classList.contains("is-open");
+    setDrawerOpen(!isOpen);
+  });
 
   $("btn-save-profile-meta").addEventListener("click", async () => {
     if (!appState.athleteProfile) return;
@@ -1539,6 +1625,7 @@ function bindEvents() {
     saveDraft(appState.athleteId, appState.draft);
 
     renderPhase3Results();
+    replayAnimation($("phase3-results"), "phase-enter");
     $("res-save-status").textContent =
       HydroTagDB.getMode().mode === "firebase" ? "Guardado en la nube." : "Guardado en este dispositivo.";
     $("phase3-results").scrollIntoView({ behavior: "smooth", block: "start" });

@@ -3,405 +3,658 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="theme-color" content="#ffffff" />
+  <meta name="theme-color" content="#F8FAFC" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="HydroTag" />
-  <meta name="description" content="Control simple de hidratación para entrenar." />
-  <title>Hidratación</title>
+  <meta name="description" content="Control clínico-deportivo de hidratación para entrenar." />
+  <title>Hidratación Deportiva</title>
 
   <link rel="manifest" href="./manifest.json" />
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ffffff'/%3E%3Cpath d='M32 10C32 10 16 28 16 40C16 48.8 23.2 56 32 56C40.8 56 48 48.8 48 40C48 28 32 10 32 10Z' fill='%231d4ed8'/%3E%3C/svg%3E" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ffffff'/%3E%3Cpath d='M32 10C32 10 16 28 16 40C16 48.8 23.2 56 32 56C40.8 56 48 48.8 48 40C48 28 32 10 32 10Z' fill='%230F172A'/%3E%3C/svg%3E" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    if (window.tailwind) {
+      window.tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['"Plus Jakarta Sans"', "ui-sans-serif", "system-ui", "-apple-system", "sans-serif"],
+              mono: ['"JetBrains Mono"', "ui-monospace", "SFMono-Regular", "monospace"]
+            }
+          }
+        }
+      };
+    }
+  </script>
+
   <style>
-    html, body { background: #ffffff; color: #111827; -webkit-tap-highlight-color: transparent;
-      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-    .tabular-nums { font-variant-numeric: tabular-nums; }
-    button:active { transform: scale(0.985); }
+    :root {
+      color-scheme: light;
+    }
+    html, body {
+      background-color: #F8FAFC;
+      color: #0F172A;
+      font-family: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .tabular-nums {
+      font-variant-numeric: tabular-nums;
+    }
+    .clinical-card {
+      background-color: #FFFFFF;
+      border: 1px solid rgba(15, 23, 42, 0.07);
+      border-radius: 1.25rem;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03), 0 10px 28px -6px rgba(15, 23, 42, 0.05);
+      transition: border-color 180ms ease, box-shadow 220ms ease;
+    }
+    .tap-action {
+      transition: transform 140ms cubic-bezier(0.22, 1, 0.36, 1),
+                  background-color 180ms ease,
+                  border-color 180ms ease,
+                  box-shadow 180ms ease,
+                  color 180ms ease,
+                  opacity 180ms ease;
+    }
+    .tap-action:active {
+      transform: scale(0.98);
+    }
+
+    @keyframes fadeSlideUp {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+    .view-animate {
+      animation: fadeSlideUp 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+    .phase-enter {
+      animation: fadeSlideUp 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+    .stagger-1 { animation: fadeSlideUp 280ms cubic-bezier(0.22, 1, 0.36, 1) 30ms both; }
+    .stagger-2 { animation: fadeSlideUp 280ms cubic-bezier(0.22, 1, 0.36, 1) 80ms both; }
+    .stagger-3 { animation: fadeSlideUp 280ms cubic-bezier(0.22, 1, 0.36, 1) 130ms both; }
+    .stagger-4 { animation: fadeSlideUp 280ms cubic-bezier(0.22, 1, 0.36, 1) 180ms both; }
+
+    @keyframes valueBump {
+      0% { transform: scale(1); }
+      40% { transform: scale(1.06); }
+      100% { transform: scale(1); }
+    }
+    .value-bump {
+      display: inline-block;
+      animation: valueBump 260ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    /* Acordeón suave con CSS Grid */
+    .drawer-grid {
+      display: grid;
+      grid-template-rows: 0fr;
+      opacity: 0;
+      transition: grid-template-rows 300ms cubic-bezier(0.22, 1, 0.36, 1),
+                  opacity 220ms ease;
+    }
+    .drawer-grid.is-open {
+      grid-template-rows: 1fr;
+      opacity: 1;
+    }
+    .drawer-inner {
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    /* Pastilla deslizante de pasos */
+    #phase-pill-indicator {
+      position: absolute;
+      top: 4px;
+      bottom: 4px;
+      left: 4px;
+      width: calc((100% - 8px) / 3);
+      border-radius: 0.75rem;
+      background-color: #FFFFFF;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 4px 12px -2px rgba(15, 23, 42, 0.06);
+      transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
+      pointer-events: none;
+    }
+
     input[type="number"]::-webkit-outer-spin-button,
-    input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-    input[type="number"] { -moz-appearance: textfield; }
+    input[type="number"]::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    input[type="number"] {
+      -moz-appearance: textfield;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
   </style>
 </head>
-<body class="min-h-screen bg-white text-gray-900 antialiased">
+<body class="min-h-screen bg-[#F8FAFC] text-slate-900 antialiased selection:bg-slate-900 selection:text-white">
 
-  <main class="mx-auto max-w-5xl px-4 pb-20 pt-6">
+  <main class="mx-auto max-w-5xl px-4 pb-24 pt-6 sm:pt-8">
 
     <!-- ===================== INICIO: CREAR PACIENTE / ENLACE NFC ===================== -->
-    <section id="view-onboarding" class="hidden mx-auto max-w-md space-y-8">
-      <div>
-        <h1 class="text-2xl font-semibold">Registrar paciente</h1>
-        <p class="mt-1 text-sm text-gray-500">Crea el enlace que se graba en el chip NFC del termo. Cada paciente tiene un ID distinto.</p>
+    <section id="view-onboarding" class="hidden mx-auto max-w-md space-y-6">
+      <div class="px-1">
+        <p class="text-xs font-semibold uppercase tracking-widest text-slate-400">Evaluación de hidratación</p>
+        <h1 class="mt-1 text-2xl font-bold tracking-tight text-slate-900">Registrar paciente</h1>
+        <p class="mt-1.5 text-sm leading-relaxed text-slate-500">
+          Asigna un identificador único y la capacidad del termo para generar el enlace del chip NFC.
+        </p>
       </div>
 
-      <form id="form-onboarding" class="space-y-5" novalidate>
+      <form id="form-onboarding" class="clinical-card space-y-5 p-5 sm:p-6" novalidate>
         <div>
-          <label for="onb-athlete-id" class="text-sm font-medium">ID del paciente</label>
-          <div class="mt-1.5 flex gap-2">
+          <label for="onb-athlete-id" class="block text-xs font-semibold uppercase tracking-wider text-slate-500">ID del paciente</label>
+          <div class="mt-2 flex gap-2">
             <input id="onb-athlete-id" type="text" autocomplete="off" placeholder="PX_01"
-              class="min-h-[48px] w-full rounded-xl border border-gray-300 px-3 text-base uppercase focus:border-gray-900 focus:outline-none" />
+              class="min-h-[48px] w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 text-base font-semibold uppercase tracking-wide text-slate-900 transition focus:border-slate-900 focus:bg-white focus:outline-none focus:ring-4 focus:ring-slate-900/5" />
             <button id="btn-generate-id" type="button"
-              class="shrink-0 rounded-xl border border-gray-300 px-4 text-sm font-medium text-gray-700">Nuevo ID</button>
+              class="tap-action shrink-0 rounded-xl border border-slate-200 bg-white px-4 text-xs font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50">
+              Nuevo ID
+            </button>
+          </div>
+        </div>
+
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label for="onb-athlete-name" class="block text-xs font-semibold uppercase tracking-wider text-slate-500">
+              Nombre <span class="font-normal normal-case text-slate-400">(opcional)</span>
+            </label>
+            <input id="onb-athlete-name" type="text" autocomplete="off" placeholder="Ej. Sofía Ramírez"
+              class="mt-2 min-h-[48px] w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 text-sm font-medium text-slate-900 transition focus:border-slate-900 focus:bg-white focus:outline-none focus:ring-4 focus:ring-slate-900/5" />
+          </div>
+
+          <div>
+            <label for="onb-athlete-sport" class="block text-xs font-semibold uppercase tracking-wider text-slate-500">
+              Deporte <span class="font-normal normal-case text-slate-400">(opcional)</span>
+            </label>
+            <input id="onb-athlete-sport" type="text" autocomplete="off" placeholder="Ej. Atletismo"
+              class="mt-2 min-h-[48px] w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 text-sm font-medium text-slate-900 transition focus:border-slate-900 focus:bg-white focus:outline-none focus:ring-4 focus:ring-slate-900/5" />
           </div>
         </div>
 
         <div>
-          <label for="onb-athlete-name" class="text-sm font-medium">Nombre <span class="font-normal text-gray-400">(opcional)</span></label>
-          <input id="onb-athlete-name" type="text" autocomplete="off"
-            class="mt-1.5 min-h-[48px] w-full rounded-xl border border-gray-300 px-3 text-base focus:border-gray-900 focus:outline-none" />
-        </div>
-
-        <div>
-          <label for="onb-athlete-sport" class="text-sm font-medium">Deporte <span class="font-normal text-gray-400">(opcional)</span></label>
-          <input id="onb-athlete-sport" type="text" autocomplete="off"
-            class="mt-1.5 min-h-[48px] w-full rounded-xl border border-gray-300 px-3 text-base focus:border-gray-900 focus:outline-none" />
-        </div>
-
-        <div>
-          <label for="onb-thermo-ml" class="text-sm font-medium">Capacidad del termo (mL)</label>
-          <div class="mt-1.5 grid grid-cols-5 gap-2">
-            <button type="button" data-ml="500" class="onb-thermo-preset min-h-[44px] rounded-xl border border-gray-300 bg-white text-sm font-medium text-gray-700">500</button>
-            <button type="button" data-ml="600" class="onb-thermo-preset min-h-[44px] rounded-xl border border-gray-300 bg-white text-sm font-medium text-gray-700">600</button>
-            <button type="button" data-ml="750" class="onb-thermo-preset min-h-[44px] rounded-xl border border-gray-300 bg-white text-sm font-medium text-gray-700">750</button>
-            <button type="button" data-ml="1000" class="onb-thermo-preset min-h-[44px] rounded-xl border border-gray-300 bg-white text-sm font-medium text-gray-700">1000</button>
+          <label for="onb-thermo-ml" class="block text-xs font-semibold uppercase tracking-wider text-slate-500">Capacidad del termo (mL)</label>
+          <div class="mt-2 grid grid-cols-5 gap-2">
+            <button type="button" data-ml="500" class="onb-thermo-preset tap-action min-h-[44px] rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700">500</button>
+            <button type="button" data-ml="600" class="onb-thermo-preset tap-action min-h-[44px] rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700">600</button>
+            <button type="button" data-ml="750" class="onb-thermo-preset tap-action min-h-[44px] rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700">750</button>
+            <button type="button" data-ml="1000" class="onb-thermo-preset tap-action min-h-[44px] rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700">1000</button>
             <input id="onb-thermo-ml" type="number" min="50" max="5000" step="any" value="750" aria-label="Otra capacidad en mL"
-              class="tabular-nums min-h-[44px] w-full rounded-xl border border-gray-300 px-2 text-center text-sm focus:border-gray-900 focus:outline-none" />
+              class="tabular-nums min-h-[44px] w-full rounded-xl border border-slate-200 bg-slate-50/70 px-2 text-center text-sm font-semibold text-slate-900 transition focus:border-slate-900 focus:bg-white focus:outline-none" />
           </div>
         </div>
 
-        <div class="rounded-2xl border border-gray-200 bg-gray-50 p-4">
-          <p class="text-sm font-medium">Enlace para el chip NFC</p>
-          <p id="onb-nfc-url" class="mt-2 break-all text-sm text-gray-600">...</p>
+        <div class="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4">
+          <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+            <svg class="h-4 w-4 text-slate-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.14 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
+            </svg>
+            <span>Enlace para grabar en chip NFC</span>
+          </div>
+          <p id="onb-nfc-url" class="mt-2 break-all rounded-xl border border-slate-200/70 bg-white px-3 py-2 font-mono text-xs text-slate-600">...</p>
           <div class="mt-3 grid gap-2 sm:grid-cols-2">
             <button id="btn-onb-copy-nfc" type="button"
-              class="min-h-[48px] rounded-xl bg-gray-900 px-4 text-sm font-semibold text-white">Copiar URL para NFC</button>
+              class="tap-action min-h-[46px] rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white shadow-sm hover:bg-slate-800">
+              Copiar URL para NFC
+            </button>
             <button id="btn-onb-write-nfc" type="button"
-              class="min-h-[48px] rounded-xl border border-gray-300 bg-white px-4 text-sm font-medium text-gray-800">Grabar en el chip (Android)</button>
+              class="tap-action min-h-[46px] rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50">
+              Grabar en chip (Android)
+            </button>
           </div>
         </div>
 
         <button id="btn-onb-start" type="submit"
-          class="min-h-[52px] w-full rounded-xl border border-gray-900 bg-white px-5 text-base font-semibold text-gray-900">
-          Guardar y abrir paciente
+          class="tap-action min-h-[52px] w-full rounded-xl border border-slate-900 bg-white px-5 text-sm font-semibold text-slate-900 hover:bg-slate-50">
+          Guardar y abrir ficha del paciente
         </button>
       </form>
 
-      <div>
-        <div class="flex items-baseline justify-between">
-          <h2 class="text-base font-semibold">Pacientes guardados</h2>
-          <span id="onb-athletes-count" class="text-sm text-gray-400">0</span>
+      <div class="clinical-card p-5 sm:p-6">
+        <div class="flex items-center justify-between">
+          <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-500">Pacientes registrados</h2>
+          <span id="onb-athletes-count" class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">0</span>
         </div>
-        <div id="onb-saved-athletes" class="mt-3 divide-y divide-gray-200 rounded-2xl border border-gray-200"></div>
+        <div id="onb-saved-athletes" class="mt-3 divide-y divide-slate-100"></div>
       </div>
 
-      <div class="flex items-center justify-between text-xs text-gray-400">
-        <span><span id="db-status-dot" class="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-gray-400 align-middle"></span><span id="db-status-text">Guardado en este dispositivo</span></span>
-        <button id="btn-install-pwa" type="button" class="hidden underline">Instalar app</button>
+      <div class="flex items-center justify-between px-1 text-xs text-slate-400">
+        <span><span id="db-status-dot" class="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-slate-400 align-middle"></span><span id="db-status-text">Guardado en este dispositivo</span></span>
+        <button id="btn-install-pwa" type="button" class="hidden font-medium text-slate-600 underline">Instalar app</button>
       </div>
     </section>
 
     <!-- ===================== PACIENTE (?id=...) ===================== -->
-    <section id="view-athlete" class="hidden mx-auto max-w-md space-y-6">
+    <section id="view-athlete" class="hidden mx-auto max-w-md space-y-5">
 
       <!-- Aviso de lectura NFC -->
-      <div id="nfc-scan-banner" class="hidden rounded-2xl border border-blue-200 bg-blue-50 p-4">
+      <div id="nfc-scan-banner" class="hidden view-animate rounded-2xl border border-sky-200 bg-sky-50/90 p-4 shadow-sm">
         <div class="flex items-start justify-between gap-3">
-          <div>
-            <p id="nfc-scan-title" class="text-sm font-semibold text-blue-900">Registrado</p>
-            <p id="nfc-scan-subtitle" class="mt-0.5 text-sm text-blue-800"></p>
+          <div class="flex items-start gap-3">
+            <div class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sky-600 text-white">
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <div>
+              <p id="nfc-scan-title" class="text-sm font-semibold text-sky-950">Registrado</p>
+              <p id="nfc-scan-subtitle" class="mt-0.5 text-sm text-sky-800"></p>
+            </div>
           </div>
-          <button id="btn-nfc-dismiss" type="button" class="shrink-0 text-sm font-medium text-blue-900 underline">Cerrar</button>
+          <button id="btn-nfc-dismiss" type="button" class="shrink-0 text-xs font-semibold text-sky-800 underline">Cerrar</button>
         </div>
-        <div class="mt-3 flex flex-wrap gap-2">
-          <button id="btn-nfc-adj-half" type="button" class="min-h-[40px] rounded-lg border border-blue-300 bg-white px-3 text-xs font-medium text-blue-900">Fue 1/2 termo</button>
-          <button id="btn-nfc-adj-quarter" type="button" class="min-h-[40px] rounded-lg border border-blue-300 bg-white px-3 text-xs font-medium text-blue-900">Fue 1/4 de termo</button>
-          <button id="btn-nfc-undo-goto-p1" type="button" class="min-h-[40px] rounded-lg border border-blue-300 bg-white px-3 text-xs font-medium text-blue-900">No bebí, ir a mi peso</button>
+        <div class="mt-3 flex flex-wrap gap-2 pl-11">
+          <button id="btn-nfc-adj-half" type="button" class="tap-action min-h-[38px] rounded-lg border border-sky-200 bg-white px-3 text-xs font-semibold text-sky-900 hover:bg-sky-50">Fue 1/2 termo</button>
+          <button id="btn-nfc-adj-quarter" type="button" class="tap-action min-h-[38px] rounded-lg border border-sky-200 bg-white px-3 text-xs font-semibold text-sky-900 hover:bg-sky-50">Fue 1/4 de termo</button>
+          <button id="btn-nfc-undo-goto-p1" type="button" class="tap-action min-h-[38px] rounded-lg border border-sky-200 bg-white px-3 text-xs font-semibold text-sky-900 hover:bg-sky-50">No bebí, ir a mi peso</button>
         </div>
       </div>
 
-      <!-- Encabezado simple -->
-      <div>
-        <p id="ath-id-label" class="text-xs font-medium uppercase tracking-wide text-gray-400">PX_01</p>
-        <h1 id="ath-name-display" class="mt-0.5 text-2xl font-semibold">Paciente</h1>
-        <p id="ath-sport-display" class="text-sm text-gray-500"></p>
-        <div class="mt-2 flex items-center gap-4 text-sm">
-          <span class="text-gray-500">Termo: <strong id="ath-thermo-badge" class="tabular-nums font-semibold text-gray-900">750 mL</strong></span>
-          <button id="btn-toggle-profile-edit" type="button" class="font-medium text-gray-900 underline">Ajustes</button>
+      <!-- Tarjeta del paciente + acordeón de ajustes -->
+      <div class="clinical-card p-5">
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <span id="ath-id-label" class="inline-block rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wider text-slate-600">PX_01</span>
+            <h1 id="ath-name-display" class="mt-1.5 truncate text-xl font-bold tracking-tight text-slate-900">Paciente</h1>
+            <p id="ath-sport-display" class="text-sm text-slate-500"></p>
+          </div>
+          <button id="btn-toggle-profile-edit" type="button" aria-expanded="false"
+            class="tap-action flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50">
+            <span>Ajustes</span>
+            <svg id="profile-edit-chevron" class="h-3.5 w-3.5 text-slate-500 transition-transform duration-300" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="mt-3 flex items-center gap-2 text-xs text-slate-500">
+          <span class="inline-flex items-center gap-1.5 rounded-lg bg-slate-50 px-2.5 py-1 font-medium text-slate-700 ring-1 ring-inset ring-slate-200/70">
+            Termo: <strong id="ath-thermo-badge" class="tabular-nums font-semibold text-slate-900">750 mL</strong>
+          </span>
+        </div>
+
+        <!-- Acordeón fluido de ajustes -->
+        <div id="profile-edit-drawer" class="drawer-grid" aria-hidden="true">
+          <div class="drawer-inner">
+            <div class="pt-4">
+              <div class="space-y-4 rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4">
+                <div>
+                  <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Capacidad de mi termo (mL)</p>
+                  <div class="mt-2 grid grid-cols-5 gap-1.5">
+                    <button type="button" data-ml="500" class="ath-thermo-preset tap-action min-h-[42px] rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700">500</button>
+                    <button type="button" data-ml="600" class="ath-thermo-preset tap-action min-h-[42px] rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700">600</button>
+                    <button type="button" data-ml="750" class="ath-thermo-preset tap-action min-h-[42px] rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700">750</button>
+                    <button type="button" data-ml="1000" class="ath-thermo-preset tap-action min-h-[42px] rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700">1000</button>
+                    <input id="ath-thermo-input" type="number" min="50" max="5000" step="any" value="750" aria-label="Capacidad exacta en mL"
+                      class="tabular-nums min-h-[42px] w-full rounded-xl border border-slate-200 bg-white px-2 text-center text-xs font-semibold text-slate-900 focus:border-slate-900 focus:outline-none" />
+                  </div>
+                </div>
+
+                <div class="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label for="ath-name-input" class="block text-xs font-semibold uppercase tracking-wider text-slate-500">Nombre</label>
+                    <input id="ath-name-input" type="text"
+                      class="mt-1.5 min-h-[42px] w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
+                  </div>
+                  <div>
+                    <label for="ath-sport-input" class="block text-xs font-semibold uppercase tracking-wider text-slate-500">Deporte</label>
+                    <input id="ath-sport-input" type="text"
+                      class="mt-1.5 min-h-[42px] w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:border-slate-900 focus:outline-none" />
+                  </div>
+                </div>
+                <button id="btn-save-profile-meta" type="button"
+                  class="tap-action min-h-[42px] rounded-xl bg-slate-900 px-4 text-xs font-semibold text-white hover:bg-slate-800">
+                  Guardar datos
+                </button>
+
+                <div>
+                  <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Al acercar el celular al chip NFC, sumar</p>
+                  <div class="mt-2 grid grid-cols-4 gap-1.5">
+                    <button type="button" data-scan="1" class="ath-autoscan-btn tap-action min-h-[40px] rounded-xl border border-slate-200 bg-white px-1 text-xs font-semibold text-slate-700">1 termo</button>
+                    <button type="button" data-scan="0.5" class="ath-autoscan-btn tap-action min-h-[40px] rounded-xl border border-slate-200 bg-white px-1 text-xs font-semibold text-slate-700">1/2 termo</button>
+                    <button type="button" data-scan="0.25" class="ath-autoscan-btn tap-action min-h-[40px] rounded-xl border border-slate-200 bg-white px-1 text-xs font-semibold text-slate-700">1/4 termo</button>
+                    <button type="button" data-scan="0" class="ath-autoscan-btn tap-action min-h-[40px] rounded-xl border border-slate-200 bg-white px-1 text-xs font-semibold text-slate-700">Nada</button>
+                  </div>
+                </div>
+
+                <div class="flex flex-wrap gap-4 border-t border-slate-200/80 pt-3 text-xs font-semibold text-slate-700">
+                  <button id="btn-ath-copy-nfc" type="button" class="underline hover:text-slate-900">Copiar URL para NFC</button>
+                  <button id="btn-simulate-nfc" type="button" class="underline hover:text-slate-900">Simular toque NFC</button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- Ajustes (termo, datos, acción NFC) -->
-      <div id="profile-edit-drawer" class="hidden space-y-5 rounded-2xl border border-gray-200 bg-gray-50 p-4">
-        <div>
-          <p class="text-sm font-medium">Capacidad de mi termo (mL)</p>
-          <div class="mt-2 grid grid-cols-5 gap-2">
-            <button type="button" data-ml="500" class="ath-thermo-preset min-h-[44px] rounded-xl border border-gray-300 bg-white text-sm font-medium text-gray-700">500</button>
-            <button type="button" data-ml="600" class="ath-thermo-preset min-h-[44px] rounded-xl border border-gray-300 bg-white text-sm font-medium text-gray-700">600</button>
-            <button type="button" data-ml="750" class="ath-thermo-preset min-h-[44px] rounded-xl border border-gray-300 bg-white text-sm font-medium text-gray-700">750</button>
-            <button type="button" data-ml="1000" class="ath-thermo-preset min-h-[44px] rounded-xl border border-gray-300 bg-white text-sm font-medium text-gray-700">1000</button>
-            <input id="ath-thermo-input" type="number" min="50" max="5000" step="any" value="750" aria-label="Capacidad exacta en mL"
-              class="tabular-nums min-h-[44px] w-full rounded-xl border border-gray-300 bg-white px-2 text-center text-sm focus:border-gray-900 focus:outline-none" />
-          </div>
-        </div>
-
-        <div class="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label for="ath-name-input" class="text-sm font-medium">Nombre</label>
-            <input id="ath-name-input" type="text" class="mt-1.5 min-h-[44px] w-full rounded-xl border border-gray-300 bg-white px-3 text-sm focus:border-gray-900 focus:outline-none" />
-          </div>
-          <div>
-            <label for="ath-sport-input" class="text-sm font-medium">Deporte</label>
-            <input id="ath-sport-input" type="text" class="mt-1.5 min-h-[44px] w-full rounded-xl border border-gray-300 bg-white px-3 text-sm focus:border-gray-900 focus:outline-none" />
-          </div>
-        </div>
-        <button id="btn-save-profile-meta" type="button" class="min-h-[44px] rounded-xl bg-gray-900 px-4 text-sm font-semibold text-white">Guardar datos</button>
-
-        <div>
-          <p class="text-sm font-medium">Al acercar el celular al chip NFC, sumar:</p>
-          <div class="mt-2 grid grid-cols-4 gap-2">
-            <button type="button" data-scan="1" class="ath-autoscan-btn min-h-[44px] rounded-xl border border-gray-300 bg-white px-1 text-xs font-medium text-gray-700">1 termo</button>
-            <button type="button" data-scan="0.5" class="ath-autoscan-btn min-h-[44px] rounded-xl border border-gray-300 bg-white px-1 text-xs font-medium text-gray-700">1/2 termo</button>
-            <button type="button" data-scan="0.25" class="ath-autoscan-btn min-h-[44px] rounded-xl border border-gray-300 bg-white px-1 text-xs font-medium text-gray-700">1/4 termo</button>
-            <button type="button" data-scan="0" class="ath-autoscan-btn min-h-[44px] rounded-xl border border-gray-300 bg-white px-1 text-xs font-medium text-gray-700">Nada</button>
-          </div>
-        </div>
-
-        <div class="flex flex-wrap gap-3 text-sm">
-          <button id="btn-ath-copy-nfc" type="button" class="font-medium underline">Copiar URL para NFC</button>
-          <button id="btn-simulate-nfc" type="button" class="font-medium underline">Simular toque NFC</button>
-        </div>
-      </div>
-
-      <!-- Pasos -->
-      <nav aria-label="Pasos" class="grid grid-cols-3 border-b border-gray-200">
-        <button id="tab-phase-1" type="button" data-phase="1" class="phase-tab -mb-px border-b-2 border-transparent py-3 text-sm font-medium text-gray-400">1. Antes</button>
-        <button id="tab-phase-2" type="button" data-phase="2" class="phase-tab -mb-px border-b-2 border-transparent py-3 text-sm font-medium text-gray-400">2. Durante</button>
-        <button id="tab-phase-3" type="button" data-phase="3" class="phase-tab -mb-px border-b-2 border-transparent py-3 text-sm font-medium text-gray-400">3. Después</button>
+      <!-- Control segmentado con pastilla deslizante -->
+      <nav aria-label="Pasos" class="relative grid grid-cols-3 rounded-2xl bg-slate-200/70 p-1">
+        <div id="phase-pill-indicator" aria-hidden="true"></div>
+        <button id="tab-phase-1" type="button" data-phase="1" class="phase-tab relative z-10 py-2.5 text-xs font-semibold transition-colors duration-200 sm:text-sm">1. Antes</button>
+        <button id="tab-phase-2" type="button" data-phase="2" class="phase-tab relative z-10 py-2.5 text-xs font-semibold transition-colors duration-200 sm:text-sm">2. Durante</button>
+        <button id="tab-phase-3" type="button" data-phase="3" class="phase-tab relative z-10 py-2.5 text-xs font-semibold transition-colors duration-200 sm:text-sm">3. Después</button>
       </nav>
 
       <!-- ============ 1. ANTES ============ -->
-      <div id="panel-phase-1" class="space-y-7">
-        <p class="text-sm text-gray-500">Antes de entrenar: pésate y revisa el color de tu orina.</p>
+      <div id="panel-phase-1" class="space-y-4">
+        <p class="px-1 text-sm text-slate-500">Antes de entrenar: registra tu peso, el color de tu orina y tu nivel de sed.</p>
 
-        <div>
-          <label for="input-peso-pre" class="text-sm font-medium">Mi peso (kg)</label>
-          <input id="input-peso-pre" type="number" inputmode="decimal" step="0.1" min="20" max="250" placeholder="70.0"
-            class="tabular-nums mt-1.5 min-h-[56px] w-full rounded-xl border border-gray-300 px-4 text-2xl font-semibold focus:border-gray-900 focus:outline-none" />
+        <div class="clinical-card p-5">
+          <label for="input-peso-pre" class="block text-xs font-semibold uppercase tracking-wider text-slate-500">Peso inicial</label>
+          <div class="mt-2 flex items-baseline gap-2 rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-1 transition focus-within:border-slate-900 focus-within:bg-white focus-within:ring-4 focus-within:ring-slate-900/5">
+            <input id="input-peso-pre" type="number" inputmode="decimal" step="0.1" min="20" max="250" placeholder="70.0"
+              class="tabular-nums min-h-[52px] w-full bg-transparent text-3xl font-bold tracking-tight text-slate-900 placeholder:text-slate-300 focus:outline-none" />
+            <span class="text-base font-semibold text-slate-400">kg</span>
+          </div>
         </div>
 
-        <div>
+        <div class="clinical-card p-5">
           <div class="flex items-baseline justify-between gap-2">
-            <p class="text-sm font-medium">Color de mi orina</p>
-            <span id="armstrong-selected-label" class="text-right text-xs text-gray-500"></span>
+            <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Color de orina (Armstrong)</p>
+            <span id="armstrong-selected-label" class="text-right text-xs font-medium text-slate-600"></span>
           </div>
-          <div id="armstrong-scale-grid" class="mt-2 grid grid-cols-4 gap-2"></div>
-          <p class="mt-2 text-xs text-gray-400">1 = muy clara &nbsp;·&nbsp; 8 = muy oscura</p>
+          <div id="armstrong-scale-grid" class="mt-3 grid grid-cols-4 gap-2"></div>
+          <p class="mt-2.5 text-[11px] text-slate-400">1 = muy clara (óptimo) &nbsp;·&nbsp; 8 = muy oscura (deshidratación)</p>
         </div>
 
-        <div>
-          <p class="text-sm font-medium">¿Tengo sed?</p>
-          <div id="thirst-options" class="mt-2 grid grid-cols-3 gap-2">
-            <button type="button" data-thirst="baja" class="thirst-btn min-h-[52px] rounded-xl border border-gray-300 bg-white text-sm font-medium text-gray-700">Nada</button>
-            <button type="button" data-thirst="moderada" class="thirst-btn min-h-[52px] rounded-xl border border-gray-300 bg-white text-sm font-medium text-gray-700">Un poco</button>
-            <button type="button" data-thirst="alta" class="thirst-btn min-h-[52px] rounded-xl border border-gray-300 bg-white text-sm font-medium text-gray-700">Mucha</button>
+        <div class="clinical-card p-5">
+          <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Nivel de sed (WUT)</p>
+          <div id="thirst-options" class="mt-3 grid grid-cols-3 gap-2">
+            <button type="button" data-thirst="baja" class="thirst-btn tap-action min-h-[50px] rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700">Nada</button>
+            <button type="button" data-thirst="moderada" class="thirst-btn tap-action min-h-[50px] rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700">Un poco</button>
+            <button type="button" data-thirst="alta" class="thirst-btn tap-action min-h-[50px] rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700">Mucha</button>
           </div>
         </div>
 
-        <div id="prehydration-alert" class="hidden rounded-2xl border border-amber-300 bg-amber-50 p-4">
-          <p class="text-sm font-semibold text-amber-900">Toma agua antes de empezar</p>
-          <p id="prehydration-reason" class="mt-1 text-sm text-amber-900"></p>
-          <p id="prehydration-dose-box" class="mt-2 text-sm font-medium text-amber-900"></p>
+        <div id="prehydration-alert" class="hidden view-animate rounded-2xl border border-amber-200 bg-amber-50/90 p-4">
+          <div class="flex items-start gap-3">
+            <div class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-500/15 text-amber-700">
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+            </div>
+            <div>
+              <p class="text-sm font-semibold text-amber-950">Toma agua antes de empezar</p>
+              <p id="prehydration-reason" class="mt-0.5 text-sm text-amber-900"></p>
+              <p id="prehydration-dose-box" class="mt-1.5 text-sm font-semibold text-amber-950"></p>
+            </div>
+          </div>
         </div>
 
-        <button id="btn-to-phase-2" type="button" class="min-h-[56px] w-full rounded-xl bg-gray-900 text-base font-semibold text-white">Continuar</button>
+        <button id="btn-to-phase-2" type="button"
+          class="tap-action min-h-[54px] w-full rounded-xl bg-slate-900 text-sm font-semibold text-white shadow-sm hover:bg-slate-800">
+          Continuar a entrenamiento
+        </button>
       </div>
 
       <!-- ============ 2. DURANTE ============ -->
-      <div id="panel-phase-2" class="hidden space-y-8">
-        <p class="text-sm text-gray-500">Mientras entrenas: inicia el cronómetro y registra cada vez que tomes agua. Sonará un aviso para recordarte.</p>
+      <div id="panel-phase-2" class="hidden space-y-4">
+        <p class="px-1 text-sm text-slate-500">Inicia el cronómetro y registra cada toma de agua. El pitido te avisará según tu intervalo.</p>
 
         <!-- Cronómetro -->
-        <div class="text-center">
-          <div id="stopwatch-display" class="tabular-nums text-6xl font-semibold tracking-tight">00:00:00</div>
-          <div class="mt-4 grid grid-cols-2 gap-2">
-            <button id="btn-timer-toggle" type="button" class="min-h-[52px] rounded-xl bg-gray-900 text-base font-semibold text-white">Iniciar</button>
-            <button id="btn-timer-reset" type="button" class="min-h-[52px] rounded-xl border border-gray-300 bg-white text-base font-medium text-gray-700">Reiniciar</button>
+        <div class="clinical-card p-5 text-center">
+          <div class="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+            <span id="timer-live-dot" class="h-2 w-2 rounded-full bg-slate-300 transition-colors"></span>
+            <span>Cronómetro de sesión</span>
+          </div>
+          <div id="stopwatch-display" class="tabular-nums mt-2 font-mono text-5xl font-semibold tracking-tight text-slate-900">00:00:00</div>
+          <div class="mt-5 grid grid-cols-2 gap-2.5">
+            <button id="btn-timer-toggle" type="button" class="tap-action min-h-[50px] rounded-xl bg-slate-900 text-sm font-semibold text-white">Iniciar</button>
+            <button id="btn-timer-reset" type="button" class="tap-action min-h-[50px] rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50">Reiniciar</button>
           </div>
         </div>
 
         <!-- Aviso de pitido -->
-        <div id="reminder-alert" class="hidden rounded-2xl border border-blue-300 bg-blue-50 p-4">
-          <p class="text-base font-semibold text-blue-900">Hora de tomar agua</p>
-          <p id="reminder-alert-text" class="mt-0.5 text-sm text-blue-900"></p>
-          <button id="btn-reminder-dismiss" type="button" class="mt-3 min-h-[44px] rounded-xl bg-blue-900 px-5 text-sm font-semibold text-white">Listo</button>
+        <div id="reminder-alert" class="hidden view-animate rounded-2xl border border-sky-200 bg-sky-50 p-4 shadow-sm">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <p class="text-sm font-semibold text-sky-950">Hora de tomar agua</p>
+              <p id="reminder-alert-text" class="mt-0.5 text-sm text-sky-900"></p>
+            </div>
+            <button id="btn-reminder-dismiss" type="button"
+              class="tap-action shrink-0 rounded-xl bg-sky-900 px-4 py-2 text-xs font-semibold text-white hover:bg-sky-800">
+              Listo
+            </button>
+          </div>
         </div>
 
         <!-- Consumo -->
-        <div>
+        <div class="clinical-card p-5">
           <div class="flex items-baseline justify-between">
-            <p class="text-sm font-medium">Agua tomada</p>
-            <p id="intake-thermos-count" class="tabular-nums text-sm text-gray-500">0.00 termos</p>
-          </div>
-          <div class="mt-1 flex items-baseline gap-2">
-            <span id="intake-total-ml" class="tabular-nums text-5xl font-semibold">0</span>
-            <span class="text-lg text-gray-500">mL</span>
-            <span id="intake-total-liters" class="tabular-nums ml-auto text-sm text-gray-400">0.00 L</span>
+            <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Agua tomada</p>
+            <p id="intake-thermos-count" class="tabular-nums text-xs font-semibold text-slate-500">0.00 termos</p>
           </div>
 
-          <button id="btn-drink-full" type="button" class="mt-4 min-h-[64px] w-full rounded-xl bg-gray-900 text-lg font-semibold text-white">
+          <div class="mt-1.5 flex items-baseline gap-2">
+            <span id="intake-total-ml" class="tabular-nums text-5xl font-bold tracking-tight text-slate-900">0</span>
+            <span class="text-base font-semibold text-slate-400">mL</span>
+            <span id="intake-total-liters" class="tabular-nums ml-auto text-sm font-medium text-slate-500">0.00 L</span>
+          </div>
+
+          <!-- Barra de progreso del termo actual -->
+          <div class="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+            <div id="intake-progress-bar" class="h-full rounded-full bg-sky-600 transition-all duration-300 ease-out" style="width: 0%;"></div>
+          </div>
+
+          <button id="btn-drink-full" type="button"
+            class="tap-action mt-4 min-h-[60px] w-full rounded-xl bg-slate-900 text-base font-semibold text-white shadow-sm hover:bg-slate-800">
             +1 Termo (<span id="label-full-ml">750</span> mL)
           </button>
-          <div class="mt-2 grid grid-cols-2 gap-2">
-            <button id="btn-drink-half" type="button" class="min-h-[56px] rounded-xl border border-gray-300 bg-white text-base font-semibold text-gray-900">
-              +1/2 Termo<span class="block text-xs font-normal text-gray-500">(<span id="label-half-ml">375</span> mL)</span>
+
+          <div class="mt-2.5 grid grid-cols-2 gap-2.5">
+            <button id="btn-drink-half" type="button"
+              class="tap-action min-h-[54px] rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-900 hover:border-slate-300 hover:bg-slate-50">
+              +1/2 Termo
+              <span class="block text-xs font-normal text-slate-500">(<span id="label-half-ml">375</span> mL)</span>
             </button>
-            <button id="btn-drink-quarter" type="button" class="min-h-[56px] rounded-xl border border-gray-300 bg-white text-base font-semibold text-gray-900">
-              +1/4 Termo<span class="block text-xs font-normal text-gray-500">(<span id="label-quarter-ml">187.5</span> mL)</span>
+            <button id="btn-drink-quarter" type="button"
+              class="tap-action min-h-[54px] rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-900 hover:border-slate-300 hover:bg-slate-50">
+              +1/4 Termo
+              <span class="block text-xs font-normal text-slate-500">(<span id="label-quarter-ml">187.5</span> mL)</span>
             </button>
           </div>
+
           <button id="btn-drink-undo" type="button" disabled
-            class="mt-2 min-h-[44px] w-full rounded-xl text-sm font-medium text-gray-600 underline disabled:cursor-not-allowed disabled:opacity-30">
+            class="tap-action mt-2.5 min-h-[40px] w-full rounded-xl text-xs font-semibold text-slate-500 underline hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-35">
             <span id="btn-drink-undo-text">Deshacer último registro</span>
           </button>
-          <div id="intake-logs-list" class="mt-2 flex flex-wrap gap-1.5 text-xs text-gray-500"></div>
+
+          <div id="intake-logs-list" class="mt-2 flex flex-wrap gap-1.5 text-xs text-slate-600"></div>
         </div>
 
         <!-- Recordatorio con pitido -->
-        <div class="rounded-2xl border border-gray-200 p-4">
+        <div class="clinical-card p-5">
           <div class="flex items-center justify-between gap-3">
             <div>
-              <p class="text-sm font-semibold">Pitido para recordarme tomar agua</p>
-              <p id="reminder-next" class="mt-0.5 tabular-nums text-xs text-gray-500">Se activa al iniciar el cronómetro</p>
+              <p class="text-sm font-semibold text-slate-900">Pitido para recordarme tomar agua</p>
+              <p id="reminder-next" class="mt-0.5 tabular-nums text-xs text-slate-500">Se activa al iniciar el cronómetro</p>
             </div>
             <label class="relative inline-flex cursor-pointer items-center">
               <input id="reminder-toggle" type="checkbox" class="peer sr-only" checked />
-              <span class="h-7 w-12 rounded-full bg-gray-300 transition peer-checked:bg-gray-900"></span>
-              <span class="absolute left-1 top-1 h-5 w-5 rounded-full bg-white transition peer-checked:translate-x-5"></span>
+              <span class="h-7 w-12 rounded-full bg-slate-200 transition-colors duration-200 peer-checked:bg-slate-900"></span>
+              <span class="absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200 peer-checked:translate-x-5"></span>
             </label>
           </div>
 
-          <p class="mt-4 text-sm text-gray-700">Sonar cada:</p>
+          <!-- Progreso hacia próximo pitido -->
+          <div class="mt-3 h-1 w-full overflow-hidden rounded-full bg-slate-100">
+            <div id="reminder-progress-bar" class="h-full rounded-full bg-slate-900 transition-all duration-500 ease-linear" style="width: 0%;"></div>
+          </div>
+
+          <p class="mt-4 text-xs font-semibold uppercase tracking-wider text-slate-500">Sonar cada (minutos)</p>
           <div class="mt-2 grid grid-cols-5 gap-2">
-            <button type="button" data-min="5" class="reminder-preset min-h-[44px] rounded-xl border border-gray-300 bg-white text-sm font-medium text-gray-700">5</button>
-            <button type="button" data-min="10" class="reminder-preset min-h-[44px] rounded-xl border border-gray-300 bg-white text-sm font-medium text-gray-700">10</button>
-            <button type="button" data-min="15" class="reminder-preset min-h-[44px] rounded-xl border border-gray-300 bg-white text-sm font-medium text-gray-700">15</button>
-            <button type="button" data-min="20" class="reminder-preset min-h-[44px] rounded-xl border border-gray-300 bg-white text-sm font-medium text-gray-700">20</button>
+            <button type="button" data-min="5" class="reminder-preset tap-action min-h-[42px] rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700">5</button>
+            <button type="button" data-min="10" class="reminder-preset tap-action min-h-[42px] rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700">10</button>
+            <button type="button" data-min="15" class="reminder-preset tap-action min-h-[42px] rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700">15</button>
+            <button type="button" data-min="20" class="reminder-preset tap-action min-h-[42px] rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700">20</button>
             <input id="reminder-input" type="number" inputmode="numeric" min="1" max="60" step="1" value="10" aria-label="Minutos entre pitidos"
-              class="tabular-nums min-h-[44px] w-full rounded-xl border border-gray-300 px-2 text-center text-sm focus:border-gray-900 focus:outline-none" />
+              class="tabular-nums min-h-[42px] w-full rounded-xl border border-slate-200 bg-slate-50/70 px-2 text-center text-sm font-semibold text-slate-900 focus:border-slate-900 focus:bg-white focus:outline-none" />
           </div>
-          <p class="mt-1 text-xs text-gray-400">minutos</p>
 
-          <div id="reminder-suggestion-box" class="mt-3 hidden rounded-xl bg-gray-50 p-3 text-xs text-gray-600">
+          <div id="reminder-suggestion-box" class="mt-3 hidden rounded-xl border border-slate-200/80 bg-slate-50 p-3 text-xs leading-relaxed text-slate-600">
             <span id="reminder-suggestion"></span>
-            <button id="btn-reminder-use-suggestion" type="button" class="ml-1 font-semibold text-gray-900 underline">Usar</button>
+            <button id="btn-reminder-use-suggestion" type="button" class="ml-1 font-semibold text-slate-900 underline">Usar sugerido</button>
           </div>
 
-          <p id="reminder-audio-hint" class="mt-3 hidden text-xs text-amber-700">Toca la pantalla una vez para activar el sonido.</p>
-          <button id="btn-test-beep" type="button" class="mt-3 text-sm font-medium text-gray-900 underline">Probar sonido</button>
+          <p id="reminder-audio-hint" class="mt-3 hidden text-xs font-medium text-amber-700">Toca la pantalla una vez para activar el sonido.</p>
+          <button id="btn-test-beep" type="button" class="tap-action mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-slate-700 underline hover:text-slate-900">
+            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M11 5L6 9H2v6h4l5 4V5zM15.54 8.46a5 5 0 010 7.07" />
+            </svg>
+            Probar sonido
+          </button>
         </div>
 
         <!-- Duración -->
-        <div>
-          <label for="input-duracion-min" class="text-sm font-medium">Duración del entrenamiento (min)</label>
+        <div class="clinical-card p-5">
+          <label for="input-duracion-min" class="block text-xs font-semibold uppercase tracking-wider text-slate-500">Duración del entrenamiento (min)</label>
           <input id="input-duracion-min" type="number" inputmode="numeric" min="1" max="720" step="1" placeholder="Se llena con el cronómetro"
-            class="tabular-nums mt-1.5 min-h-[52px] w-full rounded-xl border border-gray-300 px-4 text-xl font-semibold focus:border-gray-900 focus:outline-none" />
+            class="tabular-nums mt-2 min-h-[48px] w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 text-lg font-semibold text-slate-900 placeholder:text-sm placeholder:font-normal placeholder:text-slate-400 focus:border-slate-900 focus:bg-white focus:outline-none" />
         </div>
 
-        <button id="btn-to-phase-3" type="button" class="min-h-[56px] w-full rounded-xl bg-gray-900 text-base font-semibold text-white">Terminé de entrenar</button>
+        <button id="btn-to-phase-3" type="button"
+          class="tap-action min-h-[54px] w-full rounded-xl bg-slate-900 text-sm font-semibold text-white shadow-sm hover:bg-slate-800">
+          Terminé de entrenar
+        </button>
       </div>
 
       <!-- ============ 3. DESPUÉS ============ -->
-      <div id="panel-phase-3" class="hidden space-y-8">
-        <p class="text-sm text-gray-500">Al terminar: pésate de nuevo (seco y sin ropa mojada) para calcular cuánto sudaste.</p>
+      <div id="panel-phase-3" class="hidden space-y-5">
+        <p class="px-1 text-sm text-slate-500">Al terminar: pésate de nuevo (seco y sin ropa mojada) para calcular tu tasa de sudoración y reposición.</p>
 
-        <div class="space-y-5">
+        <div class="clinical-card space-y-4 p-5">
           <div>
-            <label for="input-peso-post" class="text-sm font-medium">Mi peso ahora (kg)</label>
-            <input id="input-peso-post" type="number" inputmode="decimal" step="0.1" min="20" max="250" placeholder="69.5"
-              class="tabular-nums mt-1.5 min-h-[56px] w-full rounded-xl border border-gray-300 px-4 text-2xl font-semibold focus:border-gray-900 focus:outline-none" />
+            <label for="input-peso-post" class="block text-xs font-semibold uppercase tracking-wider text-slate-500">Peso final</label>
+            <div class="mt-2 flex items-baseline gap-2 rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-1 transition focus-within:border-slate-900 focus-within:bg-white focus-within:ring-4 focus-within:ring-slate-900/5">
+              <input id="input-peso-post" type="number" inputmode="decimal" step="0.1" min="20" max="250" placeholder="69.5"
+                class="tabular-nums min-h-[52px] w-full bg-transparent text-3xl font-bold tracking-tight text-slate-900 placeholder:text-slate-300 focus:outline-none" />
+              <span class="text-base font-semibold text-slate-400">kg</span>
+            </div>
           </div>
+
           <div>
-            <label for="input-orina-ml" class="text-sm font-medium">Orina durante el entrenamiento (mL) <span class="font-normal text-gray-400">opcional</span></label>
+            <label for="input-orina-ml" class="block text-xs font-semibold uppercase tracking-wider text-slate-500">
+              Orina durante el entrenamiento (mL) <span class="font-normal normal-case text-slate-400">opcional</span>
+            </label>
             <input id="input-orina-ml" type="number" inputmode="numeric" step="10" min="0" max="3000" value="0"
-              class="tabular-nums mt-1.5 min-h-[52px] w-full rounded-xl border border-gray-300 px-4 text-xl font-semibold focus:border-gray-900 focus:outline-none" />
+              class="tabular-nums mt-2 min-h-[48px] w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 text-lg font-semibold text-slate-900 focus:border-slate-900 focus:bg-white focus:outline-none" />
           </div>
-          <p class="text-xs text-gray-500">
-            Peso inicial <strong id="p3-preview-pre" class="text-gray-900">-- kg</strong> ·
-            Agua tomada <strong id="p3-preview-intake" class="text-gray-900">0 mL</strong> ·
-            Duración <strong id="p3-preview-dur" class="text-gray-900">-- min</strong>
-          </p>
+
+          <div class="flex flex-wrap gap-2 pt-1 text-xs text-slate-500">
+            <span class="rounded-lg bg-slate-100 px-2.5 py-1">Peso inicial: <strong id="p3-preview-pre" class="text-slate-800">-- kg</strong></span>
+            <span class="rounded-lg bg-slate-100 px-2.5 py-1">Agua: <strong id="p3-preview-intake" class="text-slate-800">0 mL</strong></span>
+            <span class="rounded-lg bg-slate-100 px-2.5 py-1">Duración: <strong id="p3-preview-dur" class="text-slate-800">-- min</strong></span>
+          </div>
         </div>
 
-        <p id="phase3-validation-error" class="hidden rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900"></p>
+        <p id="phase3-validation-error" class="hidden view-animate rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-900"></p>
 
-        <button id="btn-calculate-save" type="button" class="min-h-[56px] w-full rounded-xl bg-gray-900 text-base font-semibold text-white">Ver mis resultados</button>
+        <button id="btn-calculate-save" type="button"
+          class="tap-action min-h-[54px] w-full rounded-xl bg-slate-900 text-sm font-semibold text-white shadow-sm hover:bg-slate-800">
+          Ver mis resultados
+        </button>
 
         <!-- Resultados -->
-        <div id="phase3-results" class="hidden space-y-6">
+        <div id="phase3-results" class="hidden space-y-4">
 
-          <div id="res-semaforo-card" class="rounded-2xl border p-5">
+          <div id="res-semaforo-card" class="stagger-1 rounded-2xl border p-5 shadow-sm">
             <div class="flex items-center justify-between gap-2">
-              <p class="text-sm font-medium">Deshidratación</p>
+              <p class="text-xs font-semibold uppercase tracking-wider opacity-80">Deshidratación aguda</p>
               <span id="res-semaforo-badge" class="rounded-full px-3 py-1 text-xs font-semibold"></span>
             </div>
             <div class="mt-2 flex items-baseline gap-3">
-              <span id="res-dehydration-pct" class="tabular-nums text-5xl font-semibold">0.00%</span>
-              <span id="res-weight-diff" class="tabular-nums text-sm"></span>
+              <span id="res-dehydration-pct" class="tabular-nums text-5xl font-bold tracking-tight">0.00%</span>
+              <span id="res-weight-diff" class="tabular-nums text-sm font-medium"></span>
             </div>
-            <p id="res-dehydration-msg" class="mt-2 text-sm"></p>
-            <p class="mt-3 text-xs opacity-70">Verde: menos de 1% · Amarillo: 1% a 2% · Rojo: más de 2% (baja el rendimiento)</p>
-          </div>
+            <p id="res-dehydration-msg" class="mt-2 text-sm leading-relaxed"></p>
 
-          <div class="rounded-2xl border border-gray-200 p-5">
-            <p class="text-sm font-medium">Cuánto sudé</p>
-            <div class="mt-1 flex items-baseline gap-2">
-              <span id="res-sweat-lh" class="tabular-nums text-5xl font-semibold">0.00</span>
-              <span class="text-lg text-gray-500">L por hora</span>
+            <!-- Barra semáforo con marcador deslizante -->
+            <div class="relative mt-4">
+              <div class="grid h-2.5 grid-cols-3 overflow-hidden rounded-full">
+                <div class="bg-emerald-500/80"></div>
+                <div class="bg-amber-400/90"></div>
+                <div class="bg-rose-500/85"></div>
+              </div>
+              <div id="res-dehydration-pin"
+                class="absolute -top-1 h-4 w-4 -translate-x-1/2 rounded-full border-2 border-white bg-slate-900 shadow transition-all duration-500 ease-out"
+                style="left: 10%;"></div>
             </div>
-            <p id="res-sweat-mlh" class="tabular-nums text-sm text-gray-500"></p>
-            <p id="res-sweat-formula" class="mt-3 text-xs text-gray-400"></p>
+            <div class="mt-2 grid grid-cols-3 text-[11px] font-medium opacity-75">
+              <span>&lt;1% Óptimo</span>
+              <span class="text-center">1–2% Leve</span>
+              <span class="text-right">&gt;2% Rendimiento ↓</span>
+            </div>
           </div>
 
-          <div class="rounded-2xl border border-gray-200 p-5">
-            <p class="text-sm font-medium">Cuánto debo tomar para recuperarme</p>
-            <p class="text-xs text-gray-400">Entre 125% y 150% de lo que perdí, en las siguientes 2 a 4 horas</p>
-            <p id="res-rehydration-range" class="tabular-nums mt-2 text-3xl font-semibold">0 – 0 mL</p>
-            <p id="res-deficit-ml" class="tabular-nums mt-1 text-sm text-gray-500"></p>
-            <p id="res-rehydration-thermos" class="mt-1 text-sm text-gray-500"></p>
+          <div class="stagger-2 clinical-card p-5">
+            <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Tasa de sudoración</p>
+            <div class="mt-1.5 flex items-baseline gap-2">
+              <span id="res-sweat-lh" class="tabular-nums text-5xl font-bold tracking-tight text-slate-900">0.00</span>
+              <span class="text-base font-semibold text-slate-500">L / hora</span>
+            </div>
+            <p id="res-sweat-mlh" class="tabular-nums mt-1 text-sm font-medium text-slate-600"></p>
+            <p id="res-sweat-formula" class="mt-3 rounded-xl bg-slate-50 px-3 py-2 font-mono text-[11px] text-slate-500"></p>
           </div>
 
-          <div id="isotonica-card" class="rounded-2xl border border-gray-200 p-5">
+          <div class="stagger-3 clinical-card p-5">
+            <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Reposición post-entreno (125%–150%)</p>
+            <p class="mt-0.5 text-xs text-slate-400">Para ingerir en las siguientes 2 a 4 horas</p>
+            <p id="res-rehydration-range" class="tabular-nums mt-2 text-3xl font-bold tracking-tight text-slate-900">0 – 0 mL</p>
+            <p id="res-deficit-ml" class="tabular-nums mt-1 text-sm font-medium text-slate-600"></p>
+            <p id="res-rehydration-thermos" class="mt-1 text-sm text-slate-500"></p>
+          </div>
+
+          <div id="isotonica-card" class="stagger-4 clinical-card p-5">
             <div class="flex items-baseline justify-between gap-2">
-              <p class="text-sm font-medium">Bebida isotónica casera</p>
-              <span id="iso-target-ml" class="tabular-nums text-sm text-gray-500"></span>
+              <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Bebida isotónica casera</p>
+              <span id="iso-target-ml" class="tabular-nums text-xs font-semibold text-slate-600"></span>
             </div>
-            <p class="text-xs text-gray-400">Agua + sal de mesa + azúcar o maltodextrina</p>
+            <p class="mt-0.5 text-xs text-slate-400">Agua + sal de mesa (NaCl) + azúcar o maltodextrina</p>
 
             <div class="mt-3 grid grid-cols-3 gap-2">
-              <button type="button" data-factor="1.25" class="iso-pct-btn min-h-[40px] rounded-lg border border-gray-300 bg-white text-xs font-medium text-gray-700">125%</button>
-              <button type="button" data-factor="1.375" class="iso-pct-btn min-h-[40px] rounded-lg border border-gray-300 bg-white text-xs font-medium text-gray-700">137.5%</button>
-              <button type="button" data-factor="1.5" class="iso-pct-btn min-h-[40px] rounded-lg border border-gray-300 bg-white text-xs font-medium text-gray-700">150%</button>
+              <button type="button" data-factor="1.25" class="iso-pct-btn tap-action min-h-[38px] rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700">125%</button>
+              <button type="button" data-factor="1.375" class="iso-pct-btn tap-action min-h-[38px] rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700">137.5%</button>
+              <button type="button" data-factor="1.5" class="iso-pct-btn tap-action min-h-[38px] rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700">150%</button>
             </div>
 
-            <dl class="mt-4 space-y-3">
-              <div>
-                <dt class="text-xs text-gray-500">Sal de mesa</dt>
-                <dd id="iso-salt-range" class="tabular-nums text-2xl font-semibold">0 g</dd>
-                <dd id="iso-salt-opt" class="text-xs text-gray-400"></dd>
+            <dl class="mt-4 grid gap-3 sm:grid-cols-2">
+              <div class="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3.5">
+                <dt class="text-xs font-medium text-slate-500">Sal de mesa</dt>
+                <dd id="iso-salt-range" class="tabular-nums mt-1 text-xl font-bold text-slate-900">0 g</dd>
+                <dd id="iso-salt-opt" class="mt-0.5 text-[11px] text-slate-500"></dd>
               </div>
-              <div>
-                <dt class="text-xs text-gray-500">Azúcar o maltodextrina (6%)</dt>
-                <dd id="iso-carb-grams" class="tabular-nums text-2xl font-semibold">0 g</dd>
-                <dd id="iso-carb-note" class="text-xs text-gray-400"></dd>
+              <div class="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3.5">
+                <dt class="text-xs font-medium text-slate-500">Azúcar / maltodextrina (6%)</dt>
+                <dd id="iso-carb-grams" class="tabular-nums mt-1 text-xl font-bold text-slate-900">0 g</dd>
+                <dd id="iso-carb-note" class="mt-0.5 text-[11px] text-slate-500"></dd>
               </div>
             </dl>
-            <p id="iso-per-thermo-note" class="mt-4 rounded-xl bg-gray-50 p-3 text-sm text-gray-700"></p>
+            <p id="iso-per-thermo-note" class="mt-3 rounded-xl bg-slate-50 p-3.5 text-xs leading-relaxed text-slate-700"></p>
           </div>
 
-          <div class="flex items-center justify-between gap-3 border-t border-gray-200 pt-4">
-            <span id="res-save-status" class="text-xs text-gray-500">Guardado.</span>
-            <button id="btn-new-session" type="button" class="min-h-[44px] rounded-xl border border-gray-300 px-4 text-sm font-medium text-gray-800">Nuevo entrenamiento</button>
+          <div class="flex items-center justify-between gap-3 px-1 pt-2">
+            <span id="res-save-status" class="text-xs font-medium text-slate-500">Guardado.</span>
+            <button id="btn-new-session" type="button"
+              class="tap-action min-h-[44px] rounded-xl border border-slate-200 bg-white px-4 text-xs font-semibold text-slate-800 hover:bg-slate-50">
+              Nuevo entrenamiento
+            </button>
           </div>
         </div>
       </div>
@@ -409,92 +662,102 @@
 
     <!-- ===================== INVESTIGADOR / NUTRIÓLOGO (?admin=true) ===================== -->
     <section id="view-admin" class="hidden space-y-6">
-      <div class="flex flex-wrap items-start justify-between gap-3">
+      <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 class="text-2xl font-semibold">Registros</h1>
-          <p class="text-sm text-gray-500">Todas las sesiones guardadas. <span id="admin-sync-mode" class="text-gray-400"></span></p>
+          <p class="text-xs font-semibold uppercase tracking-widest text-slate-400">Panel clínico</p>
+          <h1 class="mt-1 text-2xl font-bold tracking-tight text-slate-900">Registros de hidratación</h1>
+          <p class="mt-1 text-sm text-slate-500">Seguimiento por paciente. <span id="admin-sync-mode" class="text-slate-400"></span></p>
         </div>
         <div class="flex flex-wrap gap-2">
-          <button id="btn-admin-seed" type="button" class="min-h-[44px] rounded-xl border border-gray-300 px-4 text-sm font-medium text-gray-700">Cargar datos de ejemplo</button>
-          <button id="btn-admin-export-csv" type="button" class="min-h-[44px] rounded-xl bg-gray-900 px-4 text-sm font-semibold text-white">Exportar Base de Datos (CSV)</button>
+          <button id="btn-admin-seed" type="button"
+            class="tap-action min-h-[44px] rounded-xl border border-slate-200 bg-white px-4 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+            Cargar datos de ejemplo
+          </button>
+          <button id="btn-admin-export-csv" type="button"
+            class="tap-action min-h-[44px] rounded-xl bg-slate-900 px-4 text-xs font-semibold text-white shadow-sm hover:bg-slate-800">
+            Exportar Base de Datos (CSV)
+          </button>
         </div>
       </div>
 
       <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <div class="rounded-2xl border border-gray-200 p-4">
-          <p class="text-xs text-gray-500">Sesiones</p>
-          <p id="kpi-total-sessions" class="tabular-nums text-2xl font-semibold">0</p>
+        <div class="clinical-card p-4">
+          <p class="text-xs font-medium text-slate-500">Sesiones</p>
+          <p id="kpi-total-sessions" class="tabular-nums mt-1 text-2xl font-bold text-slate-900">0</p>
         </div>
-        <div class="rounded-2xl border border-gray-200 p-4">
-          <p class="text-xs text-gray-500">Pacientes</p>
-          <p id="kpi-unique-athletes" class="tabular-nums text-2xl font-semibold">0</p>
+        <div class="clinical-card p-4">
+          <p class="text-xs font-medium text-slate-500">Pacientes</p>
+          <p id="kpi-unique-athletes" class="tabular-nums mt-1 text-2xl font-bold text-slate-900">0</p>
         </div>
-        <div class="rounded-2xl border border-red-200 bg-red-50 p-4">
-          <p class="text-xs text-red-800">Deshidratación &gt; 2%</p>
-          <p id="kpi-red-alerts" class="tabular-nums text-2xl font-semibold text-red-700">0</p>
+        <div class="rounded-2xl border border-rose-200 bg-rose-50/70 p-4">
+          <p class="text-xs font-medium text-rose-800">Deshidratación &gt; 2%</p>
+          <p id="kpi-red-alerts" class="tabular-nums mt-1 text-2xl font-bold text-rose-700">0</p>
         </div>
-        <div class="rounded-2xl border border-gray-200 p-4">
-          <p class="text-xs text-gray-500">Sudoración media</p>
-          <p id="kpi-avg-sweat" class="tabular-nums text-2xl font-semibold">0.00 L/h</p>
+        <div class="clinical-card p-4">
+          <p class="text-xs font-medium text-slate-500">Sudoración media</p>
+          <p id="kpi-avg-sweat" class="tabular-nums mt-1 text-2xl font-bold text-slate-900">0.00 L/h</p>
         </div>
       </div>
 
-      <div id="admin-live-wrapper" class="hidden">
-        <p class="text-sm font-medium">Entrenando ahora</p>
-        <div id="admin-live-grid" class="mt-2 grid gap-2 sm:grid-cols-3"></div>
+      <div id="admin-live-wrapper" class="hidden clinical-card p-4 sm:p-5">
+        <p class="text-xs font-semibold uppercase tracking-wider text-slate-500">Entrenando ahora</p>
+        <div id="admin-live-grid" class="mt-3 grid gap-2.5 sm:grid-cols-3"></div>
       </div>
 
-      <div class="grid gap-3 sm:grid-cols-4">
-        <div>
-          <label for="admin-filter-athlete" class="text-xs text-gray-500">Paciente</label>
-          <select id="admin-filter-athlete" class="mt-1 min-h-[44px] w-full rounded-xl border border-gray-300 bg-white px-3 text-sm focus:border-gray-900 focus:outline-none">
-            <option value="ALL">Todos</option>
-          </select>
+      <div class="clinical-card space-y-3 p-4 sm:p-5">
+        <div class="grid gap-3 sm:grid-cols-4">
+          <div>
+            <label for="admin-filter-athlete" class="block text-xs font-medium text-slate-500">Paciente</label>
+            <select id="admin-filter-athlete"
+              class="mt-1 min-h-[42px] w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 text-sm font-medium text-slate-900 focus:border-slate-900 focus:bg-white focus:outline-none">
+              <option value="ALL">Todos</option>
+            </select>
+          </div>
+          <div class="sm:col-span-2">
+            <label for="admin-filter-search" class="block text-xs font-medium text-slate-500">Buscar</label>
+            <input id="admin-filter-search" type="search" placeholder="ID, nombre o deporte"
+              class="mt-1 min-h-[42px] w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3 text-sm text-slate-900 focus:border-slate-900 focus:bg-white focus:outline-none" />
+          </div>
+          <label class="flex min-h-[42px] cursor-pointer items-center gap-2 self-end rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50">
+            <input id="admin-filter-red-only" type="checkbox" class="h-4 w-4 accent-rose-600" />
+            Solo &gt; 2%
+          </label>
         </div>
-        <div class="sm:col-span-2">
-          <label for="admin-filter-search" class="text-xs text-gray-500">Buscar</label>
-          <input id="admin-filter-search" type="search" placeholder="ID, nombre o deporte"
-            class="mt-1 min-h-[44px] w-full rounded-xl border border-gray-300 px-3 text-sm focus:border-gray-900 focus:outline-none" />
+
+        <div class="flex items-center justify-between text-xs text-slate-500">
+          <span id="admin-filter-count">0 registros</span>
+          <button id="btn-admin-back" type="button" class="font-semibold text-slate-900 underline">Ir al inicio</button>
         </div>
-        <label class="flex min-h-[44px] cursor-pointer items-center gap-2 self-end rounded-xl border border-gray-300 px-3 text-sm">
-          <input id="admin-filter-red-only" type="checkbox" class="h-4 w-4 accent-red-600" />
-          Solo &gt; 2%
-        </label>
       </div>
 
-      <div class="flex items-center justify-between text-xs text-gray-500">
-        <span id="admin-filter-count">0 registros</span>
-        <button id="btn-admin-back" type="button" class="font-medium text-gray-900 underline">Ir al inicio</button>
-      </div>
-
-      <div class="overflow-hidden rounded-2xl border border-gray-200">
+      <div class="clinical-card overflow-hidden">
         <div class="overflow-x-auto">
-          <table class="min-w-full divide-y divide-gray-200 text-left text-sm">
-            <thead class="bg-gray-50 text-xs text-gray-500">
+          <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
+            <thead class="bg-slate-50/90 text-xs font-semibold uppercase tracking-wider text-slate-500">
               <tr>
-                <th class="px-4 py-3 font-medium">Paciente</th>
-                <th class="px-3 py-3 font-medium">Fecha</th>
-                <th class="px-3 py-3 font-medium">Termo</th>
-                <th class="px-3 py-3 font-medium">Peso pre → post</th>
-                <th class="px-3 py-3 font-medium">Agua</th>
-                <th class="px-3 py-3 font-medium">Duración</th>
-                <th class="px-3 py-3 font-medium">Sudoración</th>
-                <th class="px-3 py-3 font-medium">Deshidratación</th>
-                <th class="px-3 py-3 font-medium">Orina</th>
-                <th class="px-3 py-3 font-medium">Reposición</th>
-                <th class="px-3 py-3"></th>
+                <th class="px-4 py-3.5">Paciente</th>
+                <th class="px-3 py-3.5">Fecha</th>
+                <th class="px-3 py-3.5">Termo</th>
+                <th class="px-3 py-3.5">Peso pre → post</th>
+                <th class="px-3 py-3.5">Agua</th>
+                <th class="px-3 py-3.5">Duración</th>
+                <th class="px-3 py-3.5">Sudoración</th>
+                <th class="px-3 py-3.5">Deshidratación</th>
+                <th class="px-3 py-3.5">Orina</th>
+                <th class="px-3 py-3.5">Reposición</th>
+                <th class="px-3 py-3.5"></th>
               </tr>
             </thead>
-            <tbody id="admin-table-body" class="divide-y divide-gray-100"></tbody>
+            <tbody id="admin-table-body" class="divide-y divide-slate-100"></tbody>
           </table>
         </div>
-        <div id="admin-empty-state" class="hidden px-6 py-10 text-center text-sm text-gray-500">Todavía no hay registros.</div>
+        <div id="admin-empty-state" class="hidden px-6 py-12 text-center text-sm text-slate-500">Todavía no hay registros.</div>
       </div>
     </section>
   </main>
 
   <div id="toast-banner" role="status" aria-live="polite"
-    class="pointer-events-none fixed bottom-5 left-1/2 z-50 hidden max-w-[90%] -translate-x-1/2 rounded-xl bg-gray-900 px-4 py-3 text-center text-sm font-medium text-white shadow-lg"></div>
+    class="pointer-events-none fixed bottom-5 left-1/2 z-50 max-w-[90%] -translate-x-1/2 translate-y-2 rounded-xl bg-slate-900 px-4 py-3 text-center text-sm font-medium text-white opacity-0 shadow-lg transition-all duration-200 ease-out"></div>
 
   <script type="module" src="./app.js"></script>
 </body>
