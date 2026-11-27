@@ -238,18 +238,125 @@ function updateDbStatusUI(info) {
 }
 
 // ============================================================================
-// SONIDO (pitidos), VIBRACIÓN Y PANTALLA ENCENDIDA
+// SONIDO (pitidos en primer y segundo plano), NOTIFICACIONES Y PANTALLA
 // ============================================================================
 
 let audioCtx = null;
 let wakeLock = null;
+let keepAliveAudio = null;
+let chimeAudio = null;
+let keepAliveUrl = null;
+let chimeUrl = null;
+let chimePrimed = false;
+let chimePlaying = false;
+let bgAudioActive = false;
 
 function userHasInteracted() {
   if (navigator.userActivation) return navigator.userActivation.hasBeenActive;
   return true;
 }
 
+function writeWavString(view, offset, str) {
+  for (let i = 0; i < str.length; i += 1) {
+    view.setUint8(offset + i, str.charCodeAt(i));
+  }
+}
+
+function createWavUrl(samples, sampleRate) {
+  const dataBytes = samples.length * 2;
+  const buffer = new ArrayBuffer(44 + dataBytes);
+  const view = new DataView(buffer);
+
+  writeWavString(view, 0, "RIFF");
+  view.setUint32(4, 36 + dataBytes, true);
+  writeWavString(view, 8, "WAVE");
+  writeWavString(view, 12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeWavString(view, 36, "data");
+  view.setUint32(40, dataBytes, true);
+
+  for (let i = 0; i < samples.length; i += 1) {
+    const s = Math.max(-32767, Math.min(32767, Math.round(samples[i])));
+    view.setInt16(44 + i * 2, s, true);
+  }
+
+  return URL.createObjectURL(new Blob([buffer], { type: "audio/wav" }));
+}
+
+function buildKeepAliveSamples(sampleRate = 8000, seconds = 2) {
+  const len = sampleRate * seconds;
+  const samples = new Int16Array(len);
+  for (let i = 0; i < len; i += 1) {
+    samples[i] = i % 2 === 0 ? 1 : -1;
+  }
+  return samples;
+}
+
+function buildChimeSamples(sampleRate = 22050) {
+  const durationSec = 0.96;
+  const len = Math.round(sampleRate * durationSec);
+  const samples = new Int16Array(len);
+  const tones = [
+    { start: 0.0, end: 0.18, freq: 880 },
+    { start: 0.3, end: 0.48, freq: 880 },
+    { start: 0.6, end: 0.9, freq: 1046.5 }
+  ];
+
+  for (const tone of tones) {
+    const startIdx = Math.floor(tone.start * sampleRate);
+    const endIdx = Math.min(len, Math.floor(tone.end * sampleRate));
+    const fadeIn = Math.floor(0.015 * sampleRate);
+    const fadeOut = Math.floor(0.035 * sampleRate);
+
+    for (let i = startIdx; i < endIdx; i += 1) {
+      const rel = i - startIdx;
+      const rem = endIdx - i;
+      let env = 1;
+      if (rel < fadeIn) env = rel / Math.max(1, fadeIn);
+      else if (rem < fadeOut) env = rem / Math.max(1, fadeOut);
+      const t = rel / sampleRate;
+      samples[i] = Math.round(Math.sin(2 * Math.PI * tone.freq * t) * env * 21000);
+    }
+  }
+  return samples;
+}
+
+function initWavElements() {
+  if (keepAliveAudio && chimeAudio) return;
+  try {
+    if (!keepAliveUrl) keepAliveUrl = createWavUrl(buildKeepAliveSamples(), 8000);
+    if (!chimeUrl) chimeUrl = createWavUrl(buildChimeSamples(), 22050);
+
+    if (!keepAliveAudio) {
+      keepAliveAudio = new Audio(keepAliveUrl);
+      keepAliveAudio.loop = true;
+      keepAliveAudio.volume = 0.02;
+      keepAliveAudio.preload = "auto";
+      keepAliveAudio.playsInline = true;
+    }
+
+    if (!chimeAudio) {
+      chimeAudio = new Audio(chimeUrl);
+      chimeAudio.volume = 1;
+      chimeAudio.preload = "auto";
+      chimeAudio.playsInline = true;
+      chimeAudio.addEventListener("ended", () => {
+        chimePlaying = false;
+      });
+    }
+  } catch {
+    // fallback a Web Audio API
+  }
+}
+
 function ensureAudio() {
+  initWavElements();
   try {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return null;
@@ -264,8 +371,27 @@ function ensureAudio() {
   }
 }
 
+function primeChimeElement() {
+  initWavElements();
+  if (!chimeAudio || chimePrimed || chimePlaying || !userHasInteracted()) return;
+  chimeAudio.muted = true;
+  chimeAudio
+    .play()
+    .then(() => {
+      if (chimeAudio.muted && !chimePlaying) {
+        chimeAudio.pause();
+        chimeAudio.currentTime = 0;
+        chimeAudio.muted = false;
+      }
+      chimePrimed = true;
+    })
+    .catch(() => {
+      if (chimeAudio) chimeAudio.muted = false;
+    });
+}
+
 function audioReady() {
-  return Boolean(audioCtx && audioCtx.state === "running");
+  return bgAudioActive || chimePrimed || Boolean(audioCtx && audioCtx.state === "running");
 }
 
 function playBeeps(count = 3) {
@@ -277,7 +403,7 @@ function playBeeps(count = 3) {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = "sine";
-    osc.frequency.value = 880;
+    osc.frequency.value = i === count - 1 ? 1046.5 : 880;
     gain.gain.setValueAtTime(0.0001, t);
     gain.gain.exponentialRampToValueAtTime(0.5, t + 0.02);
     gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
@@ -289,6 +415,116 @@ function playBeeps(count = 3) {
   return true;
 }
 
+function playChime() {
+  initWavElements();
+  if (chimeAudio) {
+    try {
+      chimePlaying = true;
+      chimeAudio.muted = false;
+      chimeAudio.currentTime = 0;
+      const playPromise = chimeAudio.play();
+      if (playPromise && typeof playPromise.then === "function") {
+        playPromise
+          .then(() => {
+            chimePrimed = true;
+          })
+          .catch(() => {
+            chimePlaying = false;
+            playBeeps(3);
+          });
+      }
+      return true;
+    } catch {
+      chimePlaying = false;
+    }
+  }
+  return playBeeps(3);
+}
+
+function updateMediaSession(playing) {
+  try {
+    if (!("mediaSession" in navigator)) return;
+    if (playing) {
+      const min = getReminderMin();
+      if (typeof window.MediaMetadata === "function") {
+        navigator.mediaSession.metadata = new window.MediaMetadata({
+          title: "Hidratación en entrenamiento",
+          artist: `Aviso cada ${min} min — no cierres esta pestaña`,
+          album: appState.athleteProfile?.nombre || appState.athleteId || "HydroTag"
+        });
+      }
+      navigator.mediaSession.playbackState = "playing";
+    } else {
+      navigator.mediaSession.playbackState = "paused";
+    }
+  } catch {
+    // mediaSession no disponible
+  }
+}
+
+function syncBackgroundAudio() {
+  const shouldKeepAlive =
+    appState.route === "athlete" && Boolean(appState.draft?.timerRunning) && isReminderOn();
+
+  if (shouldKeepAlive) {
+    if (!userHasInteracted()) {
+      bgAudioActive = false;
+      return;
+    }
+    initWavElements();
+    if (keepAliveAudio) {
+      if (keepAliveAudio.paused) {
+        keepAliveAudio
+          .play()
+          .then(() => {
+            bgAudioActive = true;
+            updateMediaSession(true);
+            renderReminderUI();
+          })
+          .catch(() => {
+            bgAudioActive = false;
+          });
+      } else {
+        bgAudioActive = true;
+        updateMediaSession(true);
+      }
+    }
+  } else {
+    bgAudioActive = false;
+    if (keepAliveAudio && !keepAliveAudio.paused) {
+      try {
+        keepAliveAudio.pause();
+      } catch {
+        // ignorar
+      }
+    }
+    updateMediaSession(false);
+  }
+}
+
+async function sendSystemNotification(title, body) {
+  try {
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
+    const options = {
+      body,
+      tag: "hydrotag-reminder",
+      renotify: true,
+      vibrate: [200, 100, 200],
+      data: { url: window.location.href }
+    };
+    if ("serviceWorker" in navigator) {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg && typeof reg.showNotification === "function") {
+        await reg.showNotification(title, options);
+        return;
+      }
+    }
+    new window.Notification(title, { body, tag: "hydrotag-reminder" });
+  } catch {
+    // notificaciones no soportadas en este contexto
+  }
+}
+
 function vibrateSafely() {
   try {
     if (navigator.vibrate && userHasInteracted()) navigator.vibrate([200, 100, 200, 100, 200]);
@@ -297,13 +533,16 @@ function vibrateSafely() {
   }
 }
 
+function unlockAudio() {
+  ensureAudio();
+  primeChimeElement();
+  syncBackgroundAudio();
+  renderReminderUI();
+}
+
 function setupAudioUnlock() {
-  const unlock = () => {
-    ensureAudio();
-    renderReminderUI();
-  };
   ["pointerdown", "touchstart", "keydown"].forEach((evt) =>
-    document.addEventListener(evt, unlock, { passive: true })
+    document.addEventListener(evt, unlockAudio, { passive: true })
   );
 }
 
@@ -687,6 +926,47 @@ function renderReminderUI() {
   }
 
   $("reminder-audio-hint").classList.toggle("hidden", !(on && appState.draft.timerRunning && !audioReady()));
+
+  const bgDot = $("reminder-bg-dot");
+  const bgStatus = $("reminder-bg-status");
+  const notifBtn = $("btn-enable-notifications");
+  if (bgDot && bgStatus && notifBtn) {
+    const hasNotifApi = "Notification" in window;
+    const notifPerm = hasNotifApi ? Notification.permission : "unsupported";
+    const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent || "");
+    const isStandalone = Boolean(
+      window.navigator.standalone ||
+        (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches)
+    );
+
+    if (!on) {
+      bgDot.className = "mt-1 h-2 w-2 shrink-0 rounded-full bg-slate-300 transition-colors";
+      bgStatus.textContent = "Pitido desactivado.";
+    } else if (appState.draft.timerRunning) {
+      if (bgAudioActive || audioReady()) {
+        bgDot.className = "mt-1 h-2 w-2 shrink-0 rounded-full bg-emerald-500 transition-colors";
+        bgStatus.textContent =
+          notifPerm === "granted"
+            ? "Activo en segundo plano con avisos en pantalla bloqueada. No cierres esta pestaña."
+            : "Activo en segundo plano: puedes bloquear la pantalla o cambiar de app sin cerrar esta pestaña.";
+      } else {
+        bgDot.className = "mt-1 h-2 w-2 shrink-0 rounded-full bg-amber-500 transition-colors";
+        bgStatus.textContent = "Toca Iniciar o Probar sonido para activar el segundo plano.";
+      }
+    } else {
+      bgDot.className = "mt-1 h-2 w-2 shrink-0 rounded-full bg-slate-300 transition-colors";
+      bgStatus.textContent =
+        isIos && !isStandalone && !hasNotifApi
+          ? "Al pulsar Iniciar sonará con la pantalla bloqueada si dejas esta pestaña abierta (en iPhone agrégala a Inicio para notificaciones)."
+          : "Se activará en segundo plano al pulsar Iniciar (no cierres esta pestaña).";
+    }
+
+    if (hasNotifApi && notifPerm === "default" && on) {
+      notifBtn.classList.remove("hidden");
+    } else {
+      notifBtn.classList.add("hidden");
+    }
+  }
 }
 
 function showReminderAlert() {
@@ -697,9 +977,12 @@ function showReminderAlert() {
 }
 
 function triggerReminder() {
-  playBeeps(3);
+  const s = appState.suggestion;
+  const ml = s ? s.tomaMl : Math.round(getThermoMl() / 4);
+  playChime();
   vibrateSafely();
   showReminderAlert();
+  sendSystemNotification("Hora de tomar agua", `Toma unos ${formatMl(ml)} mL y regístralo en tu termo.`);
 }
 
 function checkReminder() {
@@ -731,6 +1014,7 @@ function startTimerLoop() {
   if (appState.draft?.timerRunning) appState.timerIntervalId = setInterval(tick, 500);
   tick();
   syncWakeLock();
+  syncBackgroundAudio();
 }
 
 function stopTimerLoop() {
@@ -742,11 +1026,13 @@ function stopTimerLoop() {
     wakeLock.release().catch(() => {});
     wakeLock = null;
   }
+  syncBackgroundAudio();
 }
 
 async function saveReminderSettings(patch) {
   Object.assign(appState.athleteProfile, patch);
   resyncBeepIndex();
+  syncBackgroundAudio();
   renderReminderUI();
   await HydroTagDB.saveAthlete(appState.athleteProfile);
 }
@@ -1441,7 +1727,7 @@ function bindEvents() {
 
   // Fase 2: cronómetro
   $("btn-timer-toggle").addEventListener("click", () => {
-    ensureAudio();
+    unlockAudio();
     const draft = appState.draft;
     if (draft.timerRunning) {
       draft.timerAccumulatedMs = getElapsedStopwatchMs();
@@ -1474,12 +1760,12 @@ function bindEvents() {
 
   // Fase 2: recordatorio con pitido
   $("reminder-toggle").addEventListener("change", () => {
-    ensureAudio();
+    unlockAudio();
     saveReminderSettings({ recordatorioOn: $("reminder-toggle").checked });
   });
   document.querySelectorAll(".reminder-preset").forEach((btn) =>
     btn.addEventListener("click", () => {
-      ensureAudio();
+      unlockAudio();
       $("reminder-input").value = btn.dataset.min;
       saveReminderSettings({ recordatorioMin: Number(btn.dataset.min) });
     })
@@ -1497,16 +1783,35 @@ function bindEvents() {
   });
   $("btn-test-beep").addEventListener("click", () => {
     ensureAudio();
-    const ok = playBeeps(3);
+    const ok = playChime();
     vibrateSafely();
+    syncBackgroundAudio();
     showToast(ok ? "Si escuchaste el pitido, está listo" : "Sin sonido: sube el volumen o desactiva el modo silencio");
     renderReminderUI();
+  });
+  $("btn-enable-notifications").addEventListener("click", async () => {
+    if (!("Notification" in window)) {
+      showToast("Este navegador no admite notificaciones");
+      return;
+    }
+    try {
+      const perm = await window.Notification.requestPermission();
+      renderReminderUI();
+      if (perm === "granted") {
+        await sendSystemNotification("Avisos activados", "Te avisaremos cuando toque hidratarte.");
+        showToast("Avisos en pantalla bloqueada activados");
+      } else {
+        showToast("Permiso no concedido; el pitido seguirá funcionando con la pestaña abierta");
+      }
+    } catch {
+      showToast("No se pudo pedir permiso de notificaciones");
+    }
   });
   $("btn-reminder-dismiss").addEventListener("click", () => $("reminder-alert").classList.add("hidden"));
 
   // Fase 2: consumo
   function addIntake(fraction, label) {
-    ensureAudio();
+    unlockAudio();
     const addedMl = Number((getThermoMl() * fraction).toFixed(1));
     appState.draft.intakeLogs.push({ id: Date.now(), fractionLabel: label, ml: addedMl });
     appState.draft.consumoMl = Number(appState.draft.intakeLogs.reduce((sum, item) => sum + item.ml, 0).toFixed(1));

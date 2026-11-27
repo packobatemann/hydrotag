@@ -1,4 +1,4 @@
-const CACHE_NAME = "hydrotag-cache-v4";
+const CACHE_NAME = "hydrotag-cache-v5";
 const CORE_ASSETS = [
   "./",
   "./index.html",
@@ -61,5 +61,26 @@ self.addEventListener("fetch", (event) => {
         }
         return new Response("Offline", { status: 503, statusText: "Offline" });
       })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const targetUrl = (event.notification.data && event.notification.data.url) || "./index.html";
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((clientsArr) => {
+        for (const client of clientsArr) {
+          if (client.url.startsWith(self.location.origin) && "focus" in client) {
+            return client.focus();
+          }
+        }
+        if (self.clients.openWindow) {
+          return self.clients.openWindow(targetUrl);
+        }
+        return undefined;
+      })
+      .catch(() => undefined)
   );
 });
